@@ -76,6 +76,7 @@ static pkgconf_client_t pkg_client;
 static const pkgconf_fragment_render_ops_t *want_render_ops = NULL;
 
 static uint64_t want_flags;
+static int verbosity = 0;
 static int maximum_traverse_depth = 2000;
 static size_t maximum_package_count = 0;
 
@@ -288,20 +289,33 @@ apply_digraph(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int 
 #endif
 
 static bool
-apply_modversion(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int maxdepth)
+apply_modversion(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth)
 {
-	pkgconf_node_t *iter;
+	pkgconf_node_t *queue_iter;
+	pkgconf_list_t *pkgq = data;
 	(void) client;
-	(void) unused;
 	(void) maxdepth;
 
-	PKGCONF_FOREACH_LIST_ENTRY(world->required.head, iter)
+	PKGCONF_FOREACH_LIST_ENTRY(pkgq->head, queue_iter)
 	{
-		pkgconf_dependency_t *dep = iter->data;
-		pkgconf_pkg_t *pkg = dep->match;
+		pkgconf_node_t *world_iter;
+		pkgconf_queue_t *queue_node = queue_iter->data;
 
-		if (pkg->version != NULL)
-			printf("%s\n", pkg->version);
+		PKGCONF_FOREACH_LIST_ENTRY(world->required.head, world_iter)
+		{
+			pkgconf_dependency_t *dep = world_iter->data;
+			pkgconf_pkg_t *pkg = dep->match;
+
+			if (strncmp(pkg->id, queue_node->package, strlen(pkg->id)))
+				continue;
+
+			if (pkg->version != NULL) {
+				if (verbosity)
+					printf("%s: ", pkg->id);
+
+				printf("%s\n", pkg->version);
+			}
+		}
 	}
 
 	return true;
@@ -643,6 +657,7 @@ usage(void)
 	printf("  --help                            this message\n");
 	printf("  --about                           print pkgconf version and license to stdout\n");
 	printf("  --version                         print supported pkg-config version to stdout\n");
+	printf("  --verbose                         print additional information\n");
 	printf("  --atleast-pkgconfig-version       check whether or not pkgconf is compatible\n");
 	printf("                                    with a specified pkg-config version\n");
 	printf("  --errors-to-stdout                print all errors on stdout instead of stderr\n");
@@ -909,6 +924,7 @@ main(int argc, char *argv[])
 		{ "personality", required_argument, NULL, 53 },
 #endif
 		{ "license", no_argument, &want_flags, PKG_DUMP_LICENSE },
+		{ "verbose", no_argument, NULL, 55 },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -968,6 +984,9 @@ main(int argc, char *argv[])
 			personality = pkgconf_cross_personality_find(pkg_optarg);
 			break;
 #endif
+		case 55:
+			verbosity++;
+			break;
 		case '?':
 		case ':':
 			ret = EXIT_FAILURE;
@@ -1119,13 +1138,16 @@ main(int argc, char *argv[])
 		(want_flags & PKG_REQUIRES_PRIVATE) == PKG_REQUIRES_PRIVATE ||
 		(want_flags & PKG_PROVIDES) == PKG_PROVIDES ||
 		(want_flags & PKG_VARIABLES) == PKG_VARIABLES ||
-		(want_flags & PKG_MODVERSION) == PKG_MODVERSION ||
 		(want_flags & PKG_PATH) == PKG_PATH ||
 		want_variable != NULL))
 	{
 		maximum_package_count = 1;
 		maximum_traverse_depth = 1;
 	}
+
+	/* we also want to walk only the flattened dependencies if we are requesting --modversion. */
+	if ((want_flags & PKG_MODVERSION) == PKG_MODVERSION)
+		maximum_traverse_depth = 1;
 
 	if (getenv("PKG_CONFIG_ALLOW_SYSTEM_CFLAGS") != NULL)
 		want_flags |= PKG_KEEP_SYSTEM_CFLAGS;
@@ -1326,16 +1348,7 @@ cleanup3:
 		 * the limit, stop adding packages to the queue.
 		 */
 		if (maximum_package_count > 0 && pkgq.length >= maximum_package_count)
-		{
-			if ((want_flags & PKG_MODVERSION) == PKG_MODVERSION)
-			{
-				fprintf(stderr, "pkgconf: --modversion requested with multiple packages, output would be ambiguous\n");
-				ret = EXIT_FAILURE;
-				goto out;
-			}
-
 			break;
-		}
 
 		while (isspace((unsigned char)package[0]))
 			package++;
@@ -1426,7 +1439,7 @@ cleanup3:
 	if ((want_flags & PKG_MODVERSION) == PKG_MODVERSION)
 	{
 		want_flags &= ~(PKG_CFLAGS|PKG_LIBS);
-		apply_modversion(&pkg_client, &world, NULL, 2);
+		apply_modversion(&pkg_client, &world, &pkgq, 2);
 	}
 
 	if ((want_flags & PKG_PATH) == PKG_PATH)

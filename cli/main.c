@@ -265,7 +265,14 @@ print_digraph_node(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *unused)
 	{
 		pkgconf_dependency_t *dep = node->data;
 
-		printf("\"%s\" -- \"%s\" [fontname=Sans fontsize=8]\n", dep->package, pkg->id);
+		printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8]\n", pkg->id, dep->package);
+	}
+
+	PKGCONF_FOREACH_LIST_ENTRY(pkg->requires_private.head, node)
+	{
+		pkgconf_dependency_t *dep = node->data;
+
+		printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8 color=gray]\n", pkg->id, dep->package);
 	}
 }
 
@@ -274,7 +281,7 @@ apply_digraph(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int 
 {
 	int eflag;
 
-	printf("graph deptree {\n");
+	printf("digraph deptree {\n");
 	printf("edge [color=blue len=7.5 fontname=Sans fontsize=8]\n");
 	printf("node [fontname=Sans fontsize=8]\n");
 
@@ -967,7 +974,7 @@ main(int argc, char *argv[])
 			logfile_arg = pkg_optarg;
 			break;
 		case 42:
-			pkgconf_path_add(pkg_optarg, &dir_list, true);
+			pkgconf_path_prepend(pkg_optarg, &dir_list, true);
 			break;
 		case 43:
 			pkgconf_client_set_prefix_varname(&pkg_client, pkg_optarg);
@@ -1341,7 +1348,8 @@ cleanup3:
 
 	while (1)
 	{
-		const char *package = argv[pkg_optind];
+		char *package = argv[pkg_optind];
+		char *end;
 
 		if (package == NULL)
 			break;
@@ -1360,6 +1368,10 @@ cleanup3:
 			pkg_optind++;
 			continue;
 		}
+
+		end = package + strlen(package) - 1;
+		while(end > package && isspace((unsigned char)end[0])) end--;
+		end[1] = '\0';
 
 		if (argv[pkg_optind + 1] == NULL || !PKGCONF_IS_OPERATOR_CHAR(*(argv[pkg_optind + 1])))
 		{

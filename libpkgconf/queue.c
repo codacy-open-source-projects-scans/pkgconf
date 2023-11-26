@@ -43,7 +43,7 @@
 void
 pkgconf_queue_push(pkgconf_list_t *list, const char *package)
 {
-	pkgconf_queue_t *pkgq = calloc(sizeof(pkgconf_queue_t), 1);
+	pkgconf_queue_t *pkgq = calloc(1, sizeof(pkgconf_queue_t));
 
 	pkgq->package = strdup(package);
 	pkgconf_node_insert_tail(&pkgq->iter, pkgq, list);
@@ -113,9 +113,10 @@ pkgconf_queue_collect_dependents(pkgconf_client_t *client, pkgconf_pkg_t *pkg, v
 
 	PKGCONF_FOREACH_LIST_ENTRY(pkg->required.head, node)
 	{
+		pkgconf_dependency_t *parent_dep = node->data;
 		pkgconf_dependency_t *flattened_dep;
 
-		flattened_dep = pkgconf_dependency_copy(client, node->data);
+		flattened_dep = pkgconf_dependency_copy(client, parent_dep);
 
 		if ((client->flags & PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE) != PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE)
 			pkgconf_node_insert(&flattened_dep->iter, flattened_dep, &world->required);
@@ -127,9 +128,10 @@ pkgconf_queue_collect_dependents(pkgconf_client_t *client, pkgconf_pkg_t *pkg, v
 	{
 		PKGCONF_FOREACH_LIST_ENTRY(pkg->requires_private.head, node)
 		{
+			pkgconf_dependency_t *parent_dep = node->data;
 			pkgconf_dependency_t *flattened_dep;
 
-			flattened_dep = pkgconf_dependency_copy(client, node->data);
+			flattened_dep = pkgconf_dependency_copy(client, parent_dep);
 
 			pkgconf_node_insert(&flattened_dep->iter, flattened_dep, &world->requires_private);
 		}
@@ -227,14 +229,28 @@ static inline unsigned int
 pkgconf_queue_verify(pkgconf_client_t *client, pkgconf_pkg_t *world, pkgconf_list_t *list, int maxdepth)
 {
 	unsigned int result;
+	pkgconf_pkg_t initial_world = {
+		.id = "virtual:world",
+		.realname = "virtual world package",
+		.flags = PKGCONF_PKG_PROPF_STATIC | PKGCONF_PKG_PROPF_VIRTUAL,
+	};
 
-	if (!pkgconf_queue_compile(client, world, list))
+	if (!pkgconf_queue_compile(client, &initial_world, list))
+	{
+		pkgconf_solution_free(client, &initial_world);
 		return PKGCONF_PKG_ERRF_DEPGRAPH_BREAK;
+	}
 
 	/* collect all the dependencies */
-	result = pkgconf_pkg_traverse(client, world, pkgconf_queue_collect_dependents, world, maxdepth, 0);
+	result = pkgconf_pkg_traverse(client, &initial_world, pkgconf_queue_collect_dependents, world, maxdepth, 0);
 	if (result != PKGCONF_PKG_ERRF_OK)
+	{
+		pkgconf_solution_free(client, &initial_world);
 		return result;
+	}
+
+	/* free the initial solution */
+	pkgconf_solution_free(client, &initial_world);
 
 	/* flatten the dependency set using serials.
 	 * we copy the dependencies to a vector, and then erase the list.

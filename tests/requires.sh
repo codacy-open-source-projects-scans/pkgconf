@@ -11,6 +11,9 @@ tests_init \
 	static_cflags \
 	private_duplication \
 	private_duplication_digraph \
+	foo_bar \
+	bar_foo \
+	foo_metapackage_3 \
 	libs_static2 \
 	missing \
 	requires_internal \
@@ -38,7 +41,7 @@ libs_static_body()
 {
 	export PKG_CONFIG_PATH="${selfdir}/lib1"
 	atf_check \
-		-o inline:"-L/test/lib -lbaz -L/test/lib -lzee -L/test/lib -lfoo\n" \
+		-o inline:"-L/test/lib -lbaz -L/test/lib -lzee -lfoo\n" \
 		pkgconf --static --libs baz
 }
 
@@ -46,7 +49,7 @@ libs_static_pure_body()
 {
 	export PKG_CONFIG_PATH="${selfdir}/lib1"
 	atf_check \
-		-o inline:"-L/test/lib -lbaz -L/test/lib -lfoo\n" \
+		-o inline:"-L/test/lib -lbaz -lfoo\n" \
 		pkgconf --static --pure --libs baz
 }
 
@@ -70,7 +73,7 @@ private_duplication_body()
 {
 	export PKG_CONFIG_PATH="${selfdir}/lib1"
 	atf_check \
-		-o inline:"-lprivate -lbaz -lzee -lbar -lfoo -lfoo\n" \
+		-o inline:"-lprivate -lbaz -lzee -lbar -lfoo\n" \
 		pkgconf --static --libs-only-l private-libs-duplication
 }
 
@@ -78,15 +81,36 @@ private_duplication_digraph_body()
 {
 	export PKG_CONFIG_PATH="${selfdir}/lib1"
 	atf_check \
-		-o 'match:"virtual:world" -> "private-libs-duplication"' \
-		-o 'match:"virtual:world" -> "bar"' \
-		-o 'match:"virtual:world" -> "baz"' \
-		-o 'match:"virtual:world" -> "foo"' \
+		-o 'match:"user:request" -> "private-libs-duplication"' \
 		-o 'match:"private-libs-duplication" -> "bar"' \
 		-o 'match:"private-libs-duplication" -> "baz"' \
 		-o 'match:"bar" -> "foo"' \
 		-o 'match:"baz" -> "foo"' \
 		pkgconf --static --libs-only-l private-libs-duplication --digraph
+}
+
+bar_foo_body()
+{
+	export PKG_CONFIG_PATH="${selfdir}/lib1"
+	atf_check \
+		-o inline:"-lbar -lfoo\n" \
+		pkgconf --static --libs-only-l bar foo
+}
+
+foo_bar_body()
+{
+	export PKG_CONFIG_PATH="${selfdir}/lib1"
+	atf_check \
+		-o inline:"-lbar -lfoo\n" \
+		pkgconf --static --libs-only-l foo bar
+}
+
+foo_metapackage_3_body()
+{
+	export PKG_CONFIG_PATH="${selfdir}/lib1"
+	atf_check \
+		-o inline:"-lbar -lfoo\n" \
+		pkgconf --static --libs-only-l foo metapackage-3
 }
 
 libs_static2_body()

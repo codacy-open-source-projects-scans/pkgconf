@@ -775,15 +775,13 @@ pkgconf_pkg_find(pkgconf_client_t *client, const char *name)
 	{
 		if ((f = fopen(name, "r")) != NULL)
 		{
-			pkgconf_pkg_t *pkg;
-
 			PKGCONF_TRACE(client, "%s is a file", name);
 
 			pkg = pkgconf_pkg_new_from_file(client, name, f, 0);
 			if (pkg != NULL)
 			{
 				pkgconf_path_add(pkg->pc_filedir, &client->dir_list, true);
-				return pkg;
+				goto out;
 			}
 		}
 	}
@@ -1456,7 +1454,11 @@ pkgconf_pkg_report_graph_error(pkgconf_client_t *client, pkgconf_pkg_t *parent, 
 			client->already_sent_notice = true;
 		}
 
-		pkgconf_error(client, "Package '%s', required by '%s', not found\n", node->package, parent->id);
+		if (parent->flags & PKGCONF_PKG_PROPF_VIRTUAL)
+			pkgconf_error(client, "Package '%s' not found\n", node->package);
+		else
+			pkgconf_error(client, "Package '%s', required by '%s', not found\n", node->package, parent->id);
+
 		pkgconf_audit_log(client, "%s NOT-FOUND\n", node->package);
 	}
 	else if (eflags & PKGCONF_PKG_ERRF_PACKAGE_VER_MISMATCH)
@@ -1487,7 +1489,7 @@ pkgconf_pkg_walk_list(pkgconf_client_t *client,
 	unsigned int eflags = PKGCONF_PKG_ERRF_OK;
 	pkgconf_node_t *node, *next;
 
-	parent->flags |= PKGCONF_PKG_PKGF_ANCESTOR;
+	parent->flags |= PKGCONF_PKG_PROPF_ANCESTOR;
 
 	PKGCONF_FOREACH_LIST_ENTRY_SAFE(deplist->head, next, node)
 	{
@@ -1509,10 +1511,8 @@ pkgconf_pkg_walk_list(pkgconf_client_t *client,
 		if (pkgdep == NULL)
 			continue;
 
-		if((pkgdep->flags & PKGCONF_PKG_PKGF_ANCESTOR) != 0)
+		if((pkgdep->flags & PKGCONF_PKG_PROPF_ANCESTOR) != 0)
 		{
-			pkgdep->identifier = ++client->identifier;
-
 			/* In this case we have a circular reference.
 			 * We break that by deleteing the circular node from the
 			 * the list, so that we dont create a situation where
@@ -1540,14 +1540,12 @@ pkgconf_pkg_walk_list(pkgconf_client_t *client,
 
 		pkgconf_audit_log_dependency(client, pkgdep, depnode);
 
-		pkgdep->identifier = ++client->identifier;
-		pkgdep->serial = client->serial;
 		eflags |= pkgconf_pkg_traverse_main(client, pkgdep, func, data, depth - 1, skip_flags);
 next:
 		pkgconf_pkg_unref(client, pkgdep);
 	}
 
-	parent->flags &= ~PKGCONF_PKG_PKGF_ANCESTOR;
+	parent->flags &= ~PKGCONF_PKG_PROPF_ANCESTOR;
 
 	return eflags;
 }
@@ -1624,27 +1622,19 @@ pkgconf_pkg_traverse_main(pkgconf_client_t *client,
 	unsigned int skip_flags)
 {
 	unsigned int eflags = PKGCONF_PKG_ERRF_OK;
-	unsigned int visited_flag = (client->flags & PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE) ? PKGCONF_PKG_PROPF_VISITED_PRIVATE : PKGCONF_PKG_PROPF_VISITED;
 
 	if (maxdepth == 0)
 		return eflags;
 
-	/* If we have already visited this node, check if we have done so as a Requires or Requires.private
-	 * query as appropriate, and short-circuit if so.
+	/* Short-circuit if we have already visited this node.
 	 */
-	if ((root->flags & PKGCONF_PKG_PROPF_VIRTUAL) == 0 && root->traverse_serial == client->traverse_serial)
-	{
-		if (root->flags & visited_flag)
-			return eflags;
-	}
-	else
-	{
-		root->traverse_serial = client->traverse_serial;
-		root->flags &= ~(PKGCONF_PKG_PROPF_VISITED|PKGCONF_PKG_PROPF_VISITED_PRIVATE);
-	}
+	if (root->serial == client->serial)
+		return eflags;
 
-	/* Update this node to indicate how we've visited it so far. */
-	root->flags |= visited_flag;
+	root->serial = client->serial;
+
+	if (root->identifier == 0)
+		root->identifier = ++client->identifier;
 
 	PKGCONF_TRACE(client, "%s: level %d, serial %"PRIu64, root->id, maxdepth, client->serial);
 
@@ -1654,21 +1644,23 @@ pkgconf_pkg_traverse_main(pkgconf_client_t *client,
 			func(client, root, data);
 	}
 
-	if (!(client->flags & PKGCONF_PKG_PKGF_SKIP_CONFLICTS))
+	if (!(client->flags & PKGCONF_PKG_PKGF_SKIP_CONFLICTS) && root->conflicts.head != NULL)
 	{
+		PKGCONF_TRACE(client, "%s: walking 'Conflicts' list", root->id);
+
 		eflags = pkgconf_pkg_walk_conflicts_list(client, root, &root->conflicts);
 		if (eflags != PKGCONF_PKG_ERRF_OK)
 			return eflags;
 	}
 
-	PKGCONF_TRACE(client, "%s: walking requires list", root->id);
+	PKGCONF_TRACE(client, "%s: walking 'Requires' list", root->id);
 	eflags = pkgconf_pkg_walk_list(client, root, &root->required, func, data, maxdepth, skip_flags);
 	if (eflags != PKGCONF_PKG_ERRF_OK)
 		return eflags;
 
 	if (client->flags & PKGCONF_PKG_PKGF_SEARCH_PRIVATE)
 	{
-		PKGCONF_TRACE(client, "%s: walking requires.private list", root->id);
+		PKGCONF_TRACE(client, "%s: walking 'Requires.private' list", root->id);
 
 		/* XXX: ugly */
 		client->flags |= PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE;
@@ -1693,7 +1685,8 @@ pkgconf_pkg_traverse(pkgconf_client_t *client,
 	if (root->flags & PKGCONF_PKG_PROPF_VIRTUAL)
 		client->serial++;
 
-	client->traverse_serial++;
+	if ((client->flags & PKGCONF_PKG_PKGF_SEARCH_PRIVATE) == 0)
+		skip_flags |= PKGCONF_PKG_DEPF_PRIVATE;
 
 	return pkgconf_pkg_traverse_main(client, root, func, data, maxdepth, skip_flags);
 }

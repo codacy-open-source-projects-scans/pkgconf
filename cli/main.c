@@ -254,39 +254,71 @@ apply_provides(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int
 
 #ifndef PKGCONF_LITE
 static void
-print_digraph_node(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *unused)
+print_digraph_node(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *data)
 {
 	pkgconf_node_t *node;
 	(void) client;
-	(void) unused;
+	pkgconf_pkg_t **last_seen = data;
 
-	printf("\"%s\" [fontname=Sans fontsize=8]\n", pkg->id);
+	if(pkg->flags & PKGCONF_PKG_PROPF_VIRTUAL)
+		return;
+
+	if (pkg->flags & PKGCONF_PKG_PROPF_VISITED_PRIVATE)
+		printf("\"%s\" [fontname=Sans fontsize=8 fontcolor=gray color=gray]\n", pkg->id);
+	else
+		printf("\"%s\" [fontname=Sans fontsize=8]\n", pkg->id);
+
+	if (last_seen != NULL)
+	{
+		if (*last_seen != NULL)
+			printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8 color=red]\n", (*last_seen)->id, pkg->id);
+
+		*last_seen = pkg;
+	}
 
 	PKGCONF_FOREACH_LIST_ENTRY(pkg->required.head, node)
 	{
 		pkgconf_dependency_t *dep = node->data;
+		const char *dep_id = (dep->match != NULL) ? dep->match->id : dep->package;
 
-		printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8]\n", pkg->id, dep->package);
+		if ((dep->flags & PKGCONF_PKG_DEPF_PRIVATE) == 0)
+			printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8]\n", pkg->id, dep_id);
+		else
+			printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8 color=gray]\n", pkg->id, dep_id);
 	}
 
 	PKGCONF_FOREACH_LIST_ENTRY(pkg->requires_private.head, node)
 	{
 		pkgconf_dependency_t *dep = node->data;
+		const char *dep_id = (dep->match != NULL) ? dep->match->id : dep->package;
 
-		printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8 color=gray]\n", pkg->id, dep->package);
+		printf("\"%s\" -> \"%s\" [fontname=Sans fontsize=8 color=gray]\n", pkg->id, dep_id);
 	}
 }
 
 static bool
-apply_digraph(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int maxdepth)
+apply_digraph(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth)
 {
 	int eflag;
+	pkgconf_list_t *list = data;
+	pkgconf_pkg_t *last_seen = NULL;
+	pkgconf_node_t *iter;
 
 	printf("digraph deptree {\n");
 	printf("edge [color=blue len=7.5 fontname=Sans fontsize=8]\n");
 	printf("node [fontname=Sans fontsize=8]\n");
+	printf("\"user:request\" [fontname=Sans fontsize=8]\n");
 
-	eflag = pkgconf_pkg_traverse(client, world, print_digraph_node, unused, maxdepth, 0);
+	PKGCONF_FOREACH_LIST_ENTRY(list->head, iter)
+	{
+		pkgconf_queue_t *pkgq = iter->data;
+		pkgconf_pkg_t *pkg = pkgconf_pkg_find(client, pkgq->package);
+		printf("\"user:request\" -> \"%s\" [fontname=Sans fontsize=8]\n", pkg == NULL ? pkgq->package : pkg->id);
+		if (pkg != NULL)
+			pkgconf_pkg_unref(client, pkg);
+	}
+
+	eflag = pkgconf_pkg_traverse(client, world, print_digraph_node, &last_seen, maxdepth, 0);
 
 	if (eflag != PKGCONF_PKG_ERRF_OK)
 		return false;
@@ -1482,7 +1514,7 @@ cleanup3:
 	if ((want_flags & PKG_DIGRAPH) == PKG_DIGRAPH)
 	{
 		want_flags &= ~(PKG_CFLAGS|PKG_LIBS);
-		apply_digraph(&pkg_client, &world, NULL, 2);
+		apply_digraph(&pkg_client, &world, &pkgq, 2);
 	}
 
 	if ((want_flags & PKG_SOLUTION) == PKG_SOLUTION)
@@ -1544,19 +1576,7 @@ cleanup3:
 			printf(" ");
 
 		if (!(want_flags & PKG_STATIC))
-		{
 			pkgconf_client_set_flags(&pkg_client, pkg_client.flags & ~PKGCONF_PKG_PKGF_SEARCH_PRIVATE);
-
-			/* redo the solution for the library set: free the solution itself, and any cached graph nodes */
-			pkgconf_solution_free(&pkg_client, &world);
-			pkgconf_cache_free(&pkg_client);
-
-			if (!pkgconf_queue_solve(&pkg_client, &pkgq, &world, maximum_traverse_depth))
-			{
-				ret = EXIT_FAILURE;
-				goto out;
-			}
-		}
 
 		apply_libs(&pkg_client, &world, NULL, 2);
 	}

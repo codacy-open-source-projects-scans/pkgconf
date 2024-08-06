@@ -72,6 +72,7 @@
 #define PKG_SHARED			(((uint64_t) 1) << 44)
 #define PKG_DUMP_LICENSE		(((uint64_t) 1) << 45)
 #define PKG_SOLUTION			(((uint64_t) 1) << 46)
+#define PKG_EXISTS_CFLAGS		(((uint64_t) 1) << 47)
 
 static pkgconf_client_t pkg_client;
 static const pkgconf_fragment_render_ops_t *want_render_ops = NULL;
@@ -369,7 +370,7 @@ apply_modversion(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int
 			if (name_len > strlen(queue_node->package) ||
 			    strncmp(pkg->why, queue_node->package, name_len) ||
 			    (queue_node->package[name_len] != 0 &&
-			     !isspace(queue_node->package[name_len]) &&
+			     !isspace((unsigned char)queue_node->package[name_len]) &&
 			     !PKGCONF_IS_OPERATOR_CHAR(queue_node->package[name_len])))
 				continue;
 
@@ -453,7 +454,8 @@ apply_variable(pkgconf_client_t *client, pkgconf_pkg_t *world, void *variable, i
 static bool
 apply_env_var(const char *prefix, pkgconf_client_t *client, pkgconf_pkg_t *world, int maxdepth,
 	unsigned int (*collect_fn)(pkgconf_client_t *client, pkgconf_pkg_t *world, pkgconf_list_t *list, int maxdepth),
-	bool (*filter_fn)(const pkgconf_client_t *client, const pkgconf_fragment_t *frag, void *data))
+	bool (*filter_fn)(const pkgconf_client_t *client, const pkgconf_fragment_t *frag, void *data),
+	void (*postprocess_fn)(pkgconf_client_t *client, pkgconf_pkg_t *world, pkgconf_list_t *fragment_list))
 {
 	pkgconf_list_t unfiltered_list = PKGCONF_LIST_INITIALIZER;
 	pkgconf_list_t filtered_list = PKGCONF_LIST_INITIALIZER;
@@ -465,6 +467,9 @@ apply_env_var(const char *prefix, pkgconf_client_t *client, pkgconf_pkg_t *world
 		return false;
 
 	pkgconf_fragment_filter(client, &filtered_list, &unfiltered_list, filter_fn, NULL);
+
+	if (postprocess_fn != NULL)
+		postprocess_fn(client, world, &filtered_list);
 
 	if (filtered_list.head == NULL)
 		goto out;
@@ -480,6 +485,46 @@ out:
 	return true;
 }
 
+static void
+maybe_add_module_definitions(pkgconf_client_t *client, pkgconf_pkg_t *world, pkgconf_list_t *fragment_list)
+{
+	pkgconf_node_t *world_iter;
+
+	if ((want_flags & PKG_EXISTS_CFLAGS) != PKG_EXISTS_CFLAGS)
+		return;
+
+	PKGCONF_FOREACH_LIST_ENTRY(world->required.head, world_iter)
+	{
+		pkgconf_dependency_t *dep = world_iter->data;
+		char havebuf[PKGCONF_ITEM_SIZE];
+		char *p;
+
+		if ((dep->flags & PKGCONF_PKG_DEPF_QUERY) != PKGCONF_PKG_DEPF_QUERY)
+			continue;
+
+		if (dep->match == NULL)
+			continue;
+
+		snprintf(havebuf, sizeof havebuf, "HAVE_%s", dep->match->id);
+
+		for (p = havebuf; *p; p++)
+		{
+			switch (*p)
+			{
+				case ' ':
+				case '-':
+					*p = '_';
+					break;
+
+				default:
+					*p = toupper((unsigned char) *p);
+			}
+		}
+
+		pkgconf_fragment_insert(client, fragment_list, 'D', havebuf, false);
+	}
+}
+
 static bool
 apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, void *env_prefix_p, int maxdepth)
 {
@@ -492,11 +537,11 @@ apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, void *env_prefix_p, in
 			return false;
 
 	snprintf(workbuf, sizeof workbuf, "%s_CFLAGS", want_env_prefix);
-	if (!apply_env_var(workbuf, client, world, maxdepth, pkgconf_pkg_cflags, filter_cflags))
+	if (!apply_env_var(workbuf, client, world, maxdepth, pkgconf_pkg_cflags, filter_cflags, maybe_add_module_definitions))
 		return false;
 
 	snprintf(workbuf, sizeof workbuf, "%s_LIBS", want_env_prefix);
-	if (!apply_env_var(workbuf, client, world, maxdepth, pkgconf_pkg_libs, filter_libs))
+	if (!apply_env_var(workbuf, client, world, maxdepth, pkgconf_pkg_libs, filter_libs, NULL))
 		return false;
 
 	return true;
@@ -516,6 +561,7 @@ apply_cflags(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int m
 		return false;
 
 	pkgconf_fragment_filter(client, &filtered_list, &unfiltered_list, filter_cflags, NULL);
+	maybe_add_module_definitions(client, world, &filtered_list);
 
 	if (filtered_list.head == NULL)
 		goto out;
@@ -798,12 +844,14 @@ usage(void)
 	printf("  --modversion                      print the specified module's version to stdout\n");
 	printf("  --internal-cflags                 do not filter 'internal' cflags from output\n");
 	printf("  --license                         print the specified module's license to stdout if known\n");
+	printf("  --exists-cflags                   add -DHAVE_FOO fragments to cflags for each found module\n");
 
 	printf("\nfiltering output:\n\n");
 #ifndef PKGCONF_LITE
 	printf("  --msvc-syntax                     print translatable fragments in MSVC syntax\n");
 #endif
 	printf("  --fragment-filter=types           filter output fragments to the specified types\n");
+	printf("  --env=prefix                      print output as shell-compatible environmental variables\n");
 
 	printf("\nreport bugs to <%s>.\n", PACKAGE_BUGREPORT);
 }
@@ -993,6 +1041,7 @@ main(int argc, char *argv[])
 #endif
 		{ "license", no_argument, &want_flags, PKG_DUMP_LICENSE },
 		{ "verbose", no_argument, NULL, 55 },
+		{ "exists-cflags", no_argument, &want_flags, PKG_EXISTS_CFLAGS },
 		{ NULL, 0, NULL, 0 }
 	};
 

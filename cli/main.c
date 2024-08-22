@@ -525,6 +525,54 @@ maybe_add_module_definitions(pkgconf_client_t *client, pkgconf_pkg_t *world, pkg
 	}
 }
 
+static void
+apply_env_variables(pkgconf_client_t *client, pkgconf_pkg_t *world, const char *env_prefix)
+{
+	(void) client;
+	pkgconf_node_t *world_iter;
+
+	PKGCONF_FOREACH_LIST_ENTRY(world->required.head, world_iter)
+	{
+		pkgconf_dependency_t *dep = world_iter->data;
+		pkgconf_pkg_t *pkg = dep->match;
+		pkgconf_node_t *tuple_iter;
+
+		if ((dep->flags & PKGCONF_PKG_DEPF_QUERY) != PKGCONF_PKG_DEPF_QUERY)
+			continue;
+
+		if (dep->match == NULL)
+			continue;
+
+		PKGCONF_FOREACH_LIST_ENTRY(pkg->vars.head, tuple_iter)
+		{
+			pkgconf_tuple_t *tuple = tuple_iter->data;
+			char havebuf[PKGCONF_ITEM_SIZE];
+			char *p;
+
+			if (want_variable != NULL && strcmp(want_variable, tuple->key))
+				continue;
+
+			snprintf(havebuf, sizeof havebuf, "%s_%s", env_prefix, tuple->key);
+
+			for (p = havebuf; *p; p++)
+			{
+				switch (*p)
+				{
+					case ' ':
+					case '-':
+						*p = '_';
+						break;
+
+					default:
+						*p = toupper((unsigned char) *p);
+				}
+			}
+
+			printf("%s='%s'\n", havebuf, tuple->value);
+		}
+	}
+}
+
 static bool
 apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, void *env_prefix_p, int maxdepth)
 {
@@ -543,6 +591,9 @@ apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, void *env_prefix_p, in
 	snprintf(workbuf, sizeof workbuf, "%s_LIBS", want_env_prefix);
 	if (!apply_env_var(workbuf, client, world, maxdepth, pkgconf_pkg_libs, filter_libs, NULL))
 		return false;
+
+	if ((want_flags & PKG_VARIABLES) == PKG_VARIABLES || want_variable != NULL)
+		apply_env_variables(client, world, want_env_prefix);
 
 	return true;
 }
@@ -1231,7 +1282,7 @@ main(int argc, char *argv[])
 /* On Windows we want to always redefine the prefix by default
  * but allow that behavior to be manually disabled */
 #if !defined(_WIN32) && !defined(_WIN64)
-	if ((want_flags & PKG_DEFINE_PREFIX) == PKG_DEFINE_PREFIX)
+	if ((want_flags & PKG_DEFINE_PREFIX) == PKG_DEFINE_PREFIX || getenv("PKG_CONFIG_RELOCATE_PATHS") != NULL)
 #endif
 		want_client_flags |= PKGCONF_PKG_PKGF_REDEFINE_PREFIX;
 
@@ -1550,7 +1601,7 @@ cleanup3:
 	if (want_env_prefix != NULL)
 	{
 		apply_env(&pkg_client, &world, want_env_prefix, 2);
-		want_flags = 0;
+		goto out;
 	}
 
 	if ((want_flags & PKG_PROVIDES) == PKG_PROVIDES)

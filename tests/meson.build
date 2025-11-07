@@ -11,8 +11,10 @@ tests = [
   'provides',
   'regress',
   'requires',
+  'spdxtool',
+  'symlink',
   'sysroot',
-  'version'
+  'version',
 ]
 
 

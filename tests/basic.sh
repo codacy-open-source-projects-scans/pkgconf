@@ -35,6 +35,8 @@ tests_init \
 	libs_metapackage \
 	license_isc \
 	license_noassertion \
+	license_file_foo \
+	license_file_empty \
 	modversion_noflatten \
 	pkg_config_path \
 	nolibs \
@@ -43,8 +45,11 @@ tests_init \
 	with_path \
 	relocatable \
 	single_depth_selectors \
+	source_foo \
+	source_empty \
 	print_variables_env \
-	variable_env
+	variable_env \
+	variable_no_recurse
 
 noargs_body()
 {
@@ -339,6 +344,34 @@ license_noassertion_body()
 		pkgconf --with-path=${selfdir}/lib1 --license bar
 }
 
+license_file_foo_body()
+{
+	atf_check \
+		-o inline:"foo: https://foo.bar/foo/COPYING\n" \
+		pkgconf --with-path=${selfdir}/lib1 --license-file foo
+}
+
+license_file_empty_body()
+{
+	atf_check \
+		-o inline:"bar: \nfoo: https://foo.bar/foo/COPYING\n" \
+		pkgconf --with-path=${selfdir}/lib1 --license-file bar
+}
+
+source_foo_body()
+{
+	atf_check \
+		-o inline:"foo: https://foo.bar/foo\n" \
+		pkgconf --with-path=${selfdir}/lib1 --source foo
+}
+
+source_empty_body()
+{
+	atf_check \
+		-o inline:"bar: \nfoo: https://foo.bar/foo\n" \
+		pkgconf --with-path=${selfdir}/lib1 --source bar
+}
+
 modversion_noflatten_body()
 {
 	atf_check \
@@ -380,4 +413,11 @@ variable_env_body()
 	atf_check \
 		-o inline:"FOO_INCLUDEDIR='/test/include'\n" \
 		pkgconf --with-path=${selfdir}/lib1 --env=FOO --variable=includedir foo
+}
+
+variable_no_recurse_body()
+{
+	atf_check \
+		-o inline:"/test/include\n" \
+		pkgconf --with-path=${selfdir}/lib1 --variable=includedir bar
 }

@@ -37,15 +37,6 @@ static unsigned default_personality_init = 0;
 
 static pkgconf_cross_personality_t default_personality = {
 	.name = "default",
-#ifdef _WIN32
-	/* PE/COFF uses a different linking model than ELF and Mach-O, where
-	 * all transitive dependency references must be processed by the linker
-	 * when linking the final executable image, even if those dependencies
-	 * are pulled in as DLLs.
-	 * This translates to always using --static on Windows targets.
-	 */
-	.want_default_static = true,
-#endif
 };
 
 static inline void
@@ -130,7 +121,8 @@ pkgconf_cross_personality_default(void)
  *
  * .. c:function:: void pkgconf_cross_personality_deinit(pkgconf_cross_personality_t *)
  *
- *    Decrements the count of default cross personality instances.
+ *    Destroys a cross personality object and/or decreases the reference count on the
+ *    default cross personality object.
  *
  *    Not thread safe.
  *
@@ -139,11 +131,28 @@ pkgconf_cross_personality_default(void)
 void
 pkgconf_cross_personality_deinit(pkgconf_cross_personality_t *personality)
 {
-    if (--default_personality_init == 0) {
-        pkgconf_path_free(&personality->dir_list);
-        pkgconf_path_free(&personality->filter_libdirs);
-        pkgconf_path_free(&personality->filter_includedirs);
-    }
+	/* allow NULL parameter for API backwards compatibility */
+	if (personality == NULL)
+		return;
+
+	/* XXX: this hack is rather ugly, but it works for now... */
+	if (personality == &default_personality && --default_personality_init > 0)
+		return;
+
+	pkgconf_path_free(&personality->dir_list);
+	pkgconf_path_free(&personality->filter_libdirs);
+	pkgconf_path_free(&personality->filter_includedirs);
+
+	if (personality->sysroot_dir != NULL)
+		free(personality->sysroot_dir);
+
+	if (personality == &default_personality)
+		return;
+
+	if (personality->name != NULL)
+		free(personality->name);
+
+	free(personality);
 }
 
 #ifndef PKGCONF_LITE
@@ -159,7 +168,7 @@ valid_triplet(const char *triplet)
 	return true;
 }
 
-typedef void (*personality_keyword_func_t)(pkgconf_cross_personality_t *p, const char *keyword, const size_t lineno, const ptrdiff_t offset, char *value);
+typedef void (*personality_keyword_func_t)(pkgconf_cross_personality_t *p, const char *keyword, const char *warnprefix, const ptrdiff_t offset, char *value);
 typedef struct {
 	const char *keyword;
 	const personality_keyword_func_t func;
@@ -167,30 +176,30 @@ typedef struct {
 } personality_keyword_pair_t;
 
 static void
-personality_bool_func(pkgconf_cross_personality_t *p, const char *keyword, const size_t lineno, const ptrdiff_t offset, char *value)
+personality_bool_func(pkgconf_cross_personality_t *p, const char *keyword, const char *warnprefix, const ptrdiff_t offset, char *value)
 {
 	(void) keyword;
-	(void) lineno;
+	(void) warnprefix;
 
 	bool *dest = (bool *)((char *) p + offset);
 	*dest = strcasecmp(value, "true") || strcasecmp(value, "yes") || *value == '1';
 }
 
 static void
-personality_copy_func(pkgconf_cross_personality_t *p, const char *keyword, const size_t lineno, const ptrdiff_t offset, char *value)
+personality_copy_func(pkgconf_cross_personality_t *p, const char *keyword, const char *warnprefix, const ptrdiff_t offset, char *value)
 {
 	(void) keyword;
-	(void) lineno;
+	(void) warnprefix;
 
 	char **dest = (char **)((char *) p + offset);
 	*dest = strdup(value);
 }
 
 static void
-personality_fragment_func(pkgconf_cross_personality_t *p, const char *keyword, const size_t lineno, const ptrdiff_t offset, char *value)
+personality_fragment_func(pkgconf_cross_personality_t *p, const char *keyword, const char *warnprefix, const ptrdiff_t offset, char *value)
 {
 	(void) keyword;
-	(void) lineno;
+	(void) warnprefix;
 
 	pkgconf_list_t *dest = (pkgconf_list_t *)((char *) p + offset);
 	pkgconf_path_split(value, dest, false);
@@ -215,7 +224,7 @@ personality_keyword_pair_cmp(const void *key, const void *ptr)
 }
 
 static void
-personality_keyword_set(pkgconf_cross_personality_t *p, const size_t lineno, const char *keyword, char *value)
+personality_keyword_set(pkgconf_cross_personality_t *p, const char *warnprefix, const char *keyword, char *value)
 {
 	const personality_keyword_pair_t *pair = bsearch(keyword,
 		personality_keyword_pairs, PKGCONF_ARRAY_SIZE(personality_keyword_pairs),
@@ -224,7 +233,7 @@ personality_keyword_set(pkgconf_cross_personality_t *p, const size_t lineno, con
 	if (pair == NULL || pair->func == NULL)
 		return;
 
-	pair->func(p, keyword, lineno, pair->offset, value);
+	pair->func(p, keyword, warnprefix, pair->offset, value);
 }
 
 static const pkgconf_parser_operand_func_t personality_parser_ops[256] = {
@@ -260,13 +269,19 @@ load_personality_with_path(const char *path, const char *triplet, bool datadir)
 	else
 		snprintf(pathbuf, sizeof pathbuf, "%s/%s.personality", path, triplet);
 
-	f = fopen(pathbuf, "r");
-	if (f == NULL)
+	p = calloc(1, sizeof(pkgconf_cross_personality_t));
+	if (p == NULL)
 		return NULL;
 
-	p = calloc(1, sizeof(pkgconf_cross_personality_t));
 	if (triplet != NULL)
 		p->name = strdup(triplet);
+
+	f = fopen(pathbuf, "r");
+	if (f == NULL) {
+		pkgconf_cross_personality_deinit(p);
+		return NULL;
+	}
+
 	pkgconf_parser_parse(f, p, personality_parser_ops, personality_warn_func, pathbuf);
 
 	return p;

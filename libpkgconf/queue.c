@@ -151,7 +151,7 @@ pkgconf_queue_collect_dependencies_walk(pkgconf_client_t *client,
 		if (pkg == NULL)
 		{
 			PKGCONF_TRACE(client, "WTF: unmatched dependency %p <%s>", dep, dep->package);
-			abort();
+			continue;
 		}
 
 		if (pkg->serial == client->serial)
@@ -189,18 +189,15 @@ pkgconf_queue_collect_dependencies_main(pkgconf_client_t *client,
 
 	root->serial = client->serial;
 
-	if (client->flags & PKGCONF_PKG_PKGF_SEARCH_PRIVATE)
-	{
-		PKGCONF_TRACE(client, "%s: collecting private dependencies, level %d", root->id, maxdepth);
+	PKGCONF_TRACE(client, "%s: collecting private dependencies, level %d", root->id, maxdepth);
 
-		/* XXX: ugly */
-		const unsigned int saved_flags = client->flags;
-		client->flags |= PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE;
-		eflags = pkgconf_queue_collect_dependencies_walk(client, &root->requires_private, data, maxdepth);
-		client->flags = saved_flags;
-		if (eflags != PKGCONF_PKG_ERRF_OK)
-			return eflags;
-	}
+	/* XXX: ugly */
+	const unsigned int saved_flags = client->flags;
+	client->flags |= PKGCONF_PKG_PKGF_ITER_PKG_IS_PRIVATE;
+	eflags = pkgconf_queue_collect_dependencies_walk(client, &root->requires_private, data, maxdepth);
+	client->flags = saved_flags;
+	if (eflags != PKGCONF_PKG_ERRF_OK)
+		return eflags;
 
 	PKGCONF_TRACE(client, "%s: collecting public dependencies, level %d", root->id, maxdepth);
 
@@ -320,7 +317,13 @@ pkgconf_queue_solve(pkgconf_client_t *client, pkgconf_list_t *list, pkgconf_pkg_
 	if (!maxdepth)
 		maxdepth = -1;
 
-	return pkgconf_queue_verify(client, world, list, maxdepth) == PKGCONF_PKG_ERRF_OK;
+	unsigned int flags = client->flags;
+	client->flags |= PKGCONF_PKG_PKGF_SEARCH_PRIVATE;
+
+	unsigned int ret = pkgconf_queue_verify(client, world, list, maxdepth);
+	client->flags = flags;
+
+	return ret == PKGCONF_PKG_ERRF_OK;
 }
 
 /*

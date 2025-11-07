@@ -12,12 +12,14 @@ nodist_pkgconfig_DATA  = libpkgconf.pc
 ACLOCAL_AMFLAGS = -I m4
 AM_CFLAGS = -DPERSONALITY_PATH=\"$(personality_dir)\" -DPKG_DEFAULT_PATH=\"$(pkg_default_dir)\" -DSYSTEM_INCLUDEDIR=\"$(system_includedir)\" -DSYSTEM_LIBDIR=\"$(system_libdir)\"
 
-bin_PROGRAMS = pkgconf bomtool
+bin_PROGRAMS = pkgconf bomtool spdxtool
 lib_LTLIBRARIES = libpkgconf.la
 
 EXTRA_DIST =	pkg.m4 \
 		meson.build \
 		meson_options.txt \
+		pkgconf.wxs.in \
+		txt2rtf.py \
 		libpkgconf/meson.build \
 		libpkgconf/config.h.meson \
 		libpkgconf/win-dirent.h \
@@ -90,6 +92,11 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/fragment-quoting-3.pc \
 		tests/lib1/fragment-quoting-5.pc \
 		tests/lib1/fragment-quoting-7.pc \
+		tests/lib1/fragment-groups.pc \
+		tests/lib1/fragment-groups-2.pc \
+		tests/lib1/fragment-group-a.pc \
+		tests/lib1/fragment-group-b.pc \
+		tests/lib1/fragment-group-c.pc \
 		tests/lib1/malformed-1.pc \
 		tests/lib1/malformed-quoting.pc \
 		tests/lib1/malformed-version.pc \
@@ -107,11 +114,28 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/tuple-quoting.pc \
 		tests/lib1/empty-tuple.pc \
 		tests/lib1/orphaned-requires-private.pc \
+		tests/lib1/pcfiledir.pc \
 		tests/lib1/sysroot-dir-2.pc \
 		tests/lib1/sysroot-dir-3.pc \
 		tests/lib1/sysroot-dir-4.pc \
 		tests/lib1/sysroot-dir-5.pc \
 		tests/lib1/child-prefix/pkgconfig/child-prefix-1.pc \
+		tests/lib1/cflags-libs-private-a.pc \
+		tests/lib1/cflags-libs-private-b.pc \
+		tests/lib1/cflags-libs-private-c.pc \
+		tests/lib1/truncated.pc \
+		tests/lib1/c-comment.pc \
+		tests/lib-sbom/meta_package.pc \
+		tests/lib-sbom/test1.pc \
+		tests/lib-sbom/test2.pc \
+		tests/lib-sbom/test3.pc \
+		tests/lib-sbom/test4.pc \
+		tests/lib-sbom/test5.pc \
+		tests/lib-sbom/test6.pc \
+		tests/lib-sbom-files/basic.json \
+		tests/lib-sbom-files/meta_package.json \
+		tests/lib-sbom-files/with_dependency.json \
+		tests/meson.build \
 		$(test_scripts) \
 		doc/conf.py \
 		doc/extract.py \
@@ -128,8 +152,7 @@ EXTRA_DIST =	pkg.m4 \
 		doc/libpkgconf-queue.rst \
 		doc/libpkgconf-tuple.rst
 
-test_scripts=	tests/meson.build \
-		tests/basic.sh \
+test_scripts=	tests/basic.sh \
 		tests/builtins.sh \
 		tests/conflicts.sh \
 		tests/framework.sh \
@@ -137,17 +160,20 @@ test_scripts=	tests/meson.build \
 		tests/provides.sh \
 		tests/regress.sh \
 		tests/requires.sh \
+		tests/spdxtool.sh \
+		tests/symlink.sh \
 		tests/sysroot.sh \
 		tests/version.sh
 
-test_sh = $(filter-out tests/meson.build, $(test_scripts))
-check_SCRIPTS = $(test_sh:.sh=)
+test_sh = $(test_scripts)
+check_SCRIPTS = ${test_sh:.sh=}
 
 SUFFIXES=	.sh
 
 nobase_pkginclude_HEADERS = libpkgconf/bsdstubs.h libpkgconf/iter.h libpkgconf/libpkgconf.h libpkgconf/stdinc.h libpkgconf/libpkgconf-api.h
 libpkgconf_la_SOURCES  =	\
 		libpkgconf/audit.c		\
+		libpkgconf/buffer.c		\
 		libpkgconf/cache.c		\
 		libpkgconf/client.c		\
 		libpkgconf/pkg.c		\
@@ -161,9 +187,10 @@ libpkgconf_la_SOURCES  =	\
 		libpkgconf/path.c		\
 		libpkgconf/personality.c	\
 		libpkgconf/parser.c
-libpkgconf_la_LDFLAGS = -no-undefined -version-info 5:0:0 -export-symbols-regex '^pkgconf_'
+libpkgconf_la_LDFLAGS = -no-undefined -version-info 7:0:0 -export-symbols-regex '^pkgconf_'
 
 dist_man_MANS    = 		\
+	man/bomtool.1		\
 	man/pkgconf.1		\
 	man/pkg.m4.7		\
 	man/pc.5		\
@@ -176,14 +203,30 @@ pkgconf_SOURCES  = \
 	cli/renderer-msvc.c
 pkgconf_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli
 noinst_HEADERS   = \
-	cli/getopt_long.h			\
-	cli/renderer-msvc.h
+	cli/getopt_long.h					\
+	cli/renderer-msvc.h					\
+	cli/spdxtool/core.h					\
+	cli/spdxtool/serialize.h			\
+	cli/spdxtool/simplelicensing.h		\
+	cli/spdxtool/software.h				\
+	cli/spdxtool/util.h
 
 bomtool_LDADD    = libpkgconf.la
 bomtool_SOURCES  = \
 	cli/bomtool/main.c				\
 	cli/getopt_long.c
 bomtool_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli -I$(top_srcdir)/cli/bomtool
+
+spdxtool_LDADD    = libpkgconf.la
+spdxtool_SOURCES  = \
+	cli/spdxtool/main.c		\
+	cli/spdxtool/core.c		\
+	cli/spdxtool/software.c		\
+	cli/spdxtool/serialize.c	\
+	cli/spdxtool/simplelicensing.c	\
+	cli/spdxtool/util.c		\
+	cli/getopt_long.c
+spdxtool_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli -I$(top_srcdir)/cli/spdxtool
 
 dist_doc_DATA = README.md AUTHORS
 

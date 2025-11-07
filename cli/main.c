@@ -73,6 +73,9 @@
 #define PKG_DUMP_LICENSE		(((uint64_t) 1) << 45)
 #define PKG_SOLUTION			(((uint64_t) 1) << 46)
 #define PKG_EXISTS_CFLAGS		(((uint64_t) 1) << 47)
+#define PKG_FRAGMENT_TREE		(((uint64_t) 1) << 48)
+#define PKG_DUMP_SOURCE		(((uint64_t) 1) << 49)
+#define PKG_DUMP_LICENSE_FILE	(((uint64_t) 1) << 50)
 
 static pkgconf_client_t pkg_client;
 static const pkgconf_fragment_render_ops_t *want_render_ops = NULL;
@@ -334,7 +337,7 @@ print_solution_node(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *unused)
 	(void) client;
 	(void) unused;
 
-	printf("%s (%"PRIu64")\n", pkg->id, pkg->identifier);
+	printf("%s (%"PRIu64")%s\n", pkg->id, pkg->identifier, (pkg->flags & PKGCONF_PKG_PROPF_VISITED_PRIVATE) == PKGCONF_PKG_PROPF_VISITED_PRIVATE ? " [private]" : "");
 }
 
 static bool
@@ -764,6 +767,49 @@ apply_simulate(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int m
 #endif
 
 static void
+print_fragment_tree_branch(pkgconf_list_t *fragment_list, int indent)
+{
+	pkgconf_node_t *iter;
+
+	PKGCONF_FOREACH_LIST_ENTRY(fragment_list->head, iter)
+	{
+		pkgconf_fragment_t *frag = iter->data;
+
+		if (frag->type)
+			printf("%*s'-%c%s' [type %c]\n", indent, "", frag->type, frag->data, frag->type);
+		else
+			printf("%*s'%s' [untyped]\n", indent, "", frag->data);
+
+		print_fragment_tree_branch(&frag->children, indent + 2);
+	}
+
+	if (fragment_list->head != NULL)
+		printf("\n");
+}
+
+static bool
+apply_fragment_tree(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth)
+{
+	pkgconf_list_t unfiltered_list = PKGCONF_LIST_INITIALIZER;
+	int eflag;
+
+	(void) data;
+
+	eflag = pkgconf_pkg_cflags(client, world, &unfiltered_list, maxdepth);
+	if (eflag != PKGCONF_PKG_ERRF_OK)
+		return false;
+
+	eflag = pkgconf_pkg_libs(client, world, &unfiltered_list, maxdepth);
+	if (eflag != PKGCONF_PKG_ERRF_OK)
+		return false;
+
+	print_fragment_tree_branch(&unfiltered_list, 0);
+	pkgconf_fragment_free(&unfiltered_list);
+
+	return true;
+}
+
+static void
 print_license(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *data)
 {
 	(void) client;
@@ -782,6 +828,58 @@ apply_license(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int ma
 	int eflag;
 
 	eflag = pkgconf_pkg_traverse(client, world, print_license, data, maxdepth, 0);
+
+	if (eflag != PKGCONF_PKG_ERRF_OK)
+		return false;
+
+	return true;
+}
+
+static void
+print_license_file(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *data)
+{
+	(void) client;
+	(void) data;
+
+	if (pkg->flags & PKGCONF_PKG_PROPF_VIRTUAL)
+		return;
+
+	/*If lisense file location if not available then just print empty */
+	printf("%s: %s\n", pkg->id, pkg->license_file != NULL ? pkg->license_file : "");
+}
+
+static bool
+apply_license_file(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth)
+{
+	int eflag;
+
+	eflag = pkgconf_pkg_traverse(client, world, print_license_file, data, maxdepth, 0);
+
+	if (eflag != PKGCONF_PKG_ERRF_OK)
+		return false;
+
+	return true;
+}
+
+static void
+print_source(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *data)
+{
+	(void) client;
+	(void) data;
+
+	if (pkg->flags & PKGCONF_PKG_PROPF_VIRTUAL)
+		return;
+
+	/* If source is empty then empty string is printed otherwise URL */
+	printf("%s: %s\n", pkg->id, pkg->source != NULL ? pkg->source : "");
+}
+
+static bool
+apply_source(pkgconf_client_t *client, pkgconf_pkg_t *world, void *data, int maxdepth)
+{
+	int eflag;
+
+	eflag = pkgconf_pkg_traverse(client, world, print_source, data, maxdepth, 0);
 
 	if (eflag != PKGCONF_PKG_ERRF_OK)
 		return false;
@@ -895,6 +993,7 @@ usage(void)
 	printf("  --modversion                      print the specified module's version to stdout\n");
 	printf("  --internal-cflags                 do not filter 'internal' cflags from output\n");
 	printf("  --license                         print the specified module's license to stdout if known\n");
+	printf("  --source                          print the specified module's source code location to stdout if known\n");
 	printf("  --exists-cflags                   add -DHAVE_FOO fragments to cflags for each found module\n");
 
 	printf("\nfiltering output:\n\n");
@@ -903,6 +1002,7 @@ usage(void)
 #endif
 	printf("  --fragment-filter=types           filter output fragments to the specified types\n");
 	printf("  --env=prefix                      print output as shell-compatible environmental variables\n");
+	printf("  --fragment-tree                   visualize printed CFLAGS/LIBS fragments as a tree\n");
 
 	printf("\nreport bugs to <%s>.\n", PACKAGE_BUGREPORT);
 }
@@ -986,6 +1086,47 @@ deduce_personality(char *argv[])
 }
 #endif
 
+static void
+unveil_handler(const pkgconf_client_t *client, const char *path, const char *permissions)
+{
+	(void) client;
+
+	if (pkgconf_unveil(path, permissions) == -1)
+	{
+		fprintf(stderr, "pkgconf: unveil failed: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+}
+
+static bool
+unveil_search_paths(const pkgconf_client_t *client, const pkgconf_cross_personality_t *personality)
+{
+	pkgconf_node_t *n;
+
+	if (pkgconf_unveil("/dev/null", "rwc") == -1)
+		return false;
+
+	PKGCONF_FOREACH_LIST_ENTRY(client->dir_list.head, n)
+	{
+		pkgconf_path_t *pn = n->data;
+
+		if (pkgconf_unveil(pn->path, "r") == -1 && errno != ENOENT)
+			return false;
+	}
+
+	PKGCONF_FOREACH_LIST_ENTRY(personality->dir_list.head, n)
+	{
+		pkgconf_path_t *pn = n->data;
+
+		if (pkgconf_unveil(pn->path, "r") == -1 && errno != ENOENT)
+			return false;
+	}
+
+	pkgconf_client_set_unveil_handler(&pkg_client, unveil_handler);
+
+	return true;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -1009,6 +1150,12 @@ main(int argc, char *argv[])
 		.realname = "virtual world package",
 		.flags = PKGCONF_PKG_PROPF_STATIC | PKGCONF_PKG_PROPF_VIRTUAL,
 	};
+
+	if (pkgconf_pledge("stdio rpath wpath cpath unveil", NULL) == -1)
+	{
+		fprintf(stderr, "pkgconf: pledge failed: %s\n", strerror(errno));
+		return EXIT_FAILURE;
+	}
 
 	want_flags = 0;
 
@@ -1091,8 +1238,11 @@ main(int argc, char *argv[])
 		{ "personality", required_argument, NULL, 53 },
 #endif
 		{ "license", no_argument, &want_flags, PKG_DUMP_LICENSE },
+		{ "license-file", no_argument, &want_flags, PKG_DUMP_LICENSE_FILE },
 		{ "verbose", no_argument, NULL, 55 },
 		{ "exists-cflags", no_argument, &want_flags, PKG_EXISTS_CFLAGS },
+		{ "fragment-tree", no_argument, &want_flags, PKG_FRAGMENT_TREE },
+		{ "source", no_argument, &want_flags, PKG_DUMP_SOURCE },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -1172,9 +1322,6 @@ main(int argc, char *argv[])
 #endif
 	}
 
-	pkgconf_path_copy_list(&personality->dir_list, &dir_list);
-	pkgconf_path_free(&dir_list);
-
 #ifndef PKGCONF_LITE
 	if ((want_flags & PKG_DUMP_PERSONALITY) == PKG_DUMP_PERSONALITY)
 	{
@@ -1212,6 +1359,9 @@ main(int argc, char *argv[])
 	if ((want_flags & PKG_DEBUG) == PKG_DEBUG)
 		pkgconf_client_set_trace_handler(&pkg_client, error_handler, NULL);
 #endif
+
+	pkgconf_path_prepend_list(&pkg_client.dir_list, &dir_list);
+	pkgconf_path_free(&dir_list);
 
 	if ((want_flags & PKG_ABOUT) == PKG_ABOUT)
 	{
@@ -1306,7 +1456,8 @@ main(int argc, char *argv[])
 	    (want_flags & PKG_REQUIRES_PRIVATE) == PKG_REQUIRES_PRIVATE ||
 	    (want_flags & PKG_PROVIDES) == PKG_PROVIDES ||
 	    (want_flags & PKG_VARIABLES) == PKG_VARIABLES ||
-	    (want_flags & PKG_PATH) == PKG_PATH)
+	    (want_flags & PKG_PATH) == PKG_PATH ||
+	    want_variable != NULL)
 		maximum_traverse_depth = 1;
 
 	/* if we are asking for a variable, path or list of variables, this only makes sense
@@ -1351,6 +1502,16 @@ main(int argc, char *argv[])
 	/* at this point, want_client_flags should be set, so build the dir list */
 	pkgconf_client_dir_list_build(&pkg_client, personality);
 
+	/* unveil the entire search path now that we have loaded the personality data and built the dir list. */
+	if (!unveil_search_paths(&pkg_client, personality))
+	{
+		fprintf(stderr, "pkgconf: unveil failed: %s\n", strerror(errno));
+		return EXIT_FAILURE;
+	}
+
+	/* preload any files in PKG_CONFIG_PRELOADED_FILES */
+	pkgconf_client_preload_from_environ(&pkg_client, "PKG_CONFIG_PRELOADED_FILES");
+
 	if (required_pkgconfig_version != NULL)
 	{
 		if (pkgconf_compare_version(PACKAGE_VERSION, required_pkgconfig_version) >= 0)
@@ -1380,7 +1541,13 @@ main(int argc, char *argv[])
 
 	if (logfile_arg != NULL)
 	{
-		logfile_out = fopen(logfile_arg, "w");
+		if (pkgconf_unveil(logfile_arg, "rwc") == -1)
+		{
+			fprintf(stderr, "pkgconf: unveil failed: %s\n", strerror(errno));
+			return EXIT_FAILURE;
+		}
+
+		logfile_out = fopen(logfile_arg, "a");
 		pkgconf_audit_set_log(&pkg_client, logfile_out);
 	}
 
@@ -1572,6 +1739,13 @@ cleanup3:
 		goto out;
 	}
 
+	/* we shouldn't need to unveil any more filesystem accesses from this point, so lock it down */
+	if (pkgconf_unveil(NULL, NULL) == -1)
+	{
+		fprintf(stderr, "pkgconf: unveil lockdown failed: %s\n", strerror(errno));
+		return EXIT_FAILURE;
+	}
+
 #ifndef PKGCONF_LITE
 	if ((want_flags & PKG_SIMULATE) == PKG_SIMULATE)
 	{
@@ -1590,6 +1764,19 @@ cleanup3:
 		apply_license(&pkg_client, &world, &ret, 2);
 		goto out;
 	}
+
+	if ((want_flags & PKG_DUMP_LICENSE_FILE) == PKG_DUMP_LICENSE_FILE)
+	{
+		apply_license_file(&pkg_client, &world, &ret, 2);
+		goto out;
+	}
+
+	if ((want_flags & PKG_DUMP_SOURCE) == PKG_DUMP_SOURCE)
+	{
+		apply_source(&pkg_client, &world, &ret, 2);
+		goto out;
+	}
+
 
 	if ((want_flags & PKG_UNINSTALLED) == PKG_UNINSTALLED)
 	{
@@ -1663,6 +1850,13 @@ cleanup3:
 		want_flags &= ~(PKG_CFLAGS|PKG_LIBS);
 
 		apply_requires_private(&pkg_client, &world, NULL, 2);
+	}
+
+	if ((want_flags & PKG_FRAGMENT_TREE))
+	{
+		want_flags &= ~(PKG_CFLAGS|PKG_LIBS);
+
+		apply_fragment_tree(&pkg_client, &world, NULL, 2);
 	}
 
 	if ((want_flags & PKG_CFLAGS))

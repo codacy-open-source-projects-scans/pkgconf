@@ -35,7 +35,12 @@ tests_init \
 	tuple_dequote \
 	version_with_whitespace \
 	version_with_whitespace_2 \
-	version_with_whitespace_diagnostic
+	version_with_whitespace_diagnostic \
+	fragment_groups \
+	fragment_groups_composite \
+	fragment_tree \
+	truncated \
+	c_comment
 
 comments_body()
 {
@@ -316,3 +321,52 @@ version_with_whitespace_diagnostic_body()
 		-o match:warning \
 		pkgconf --with-path="${selfdir}/lib1" --validate malformed-version
 }
+
+fragment_groups_body()
+{
+	atf_check \
+		-o inline:'-Wl,--start-group -la -lb -Wl,--end-group -nodefaultlibs -Wl,--start-group -la -lgcc -Wl,--end-group -Wl,--gc-sections\n' \
+		pkgconf --with-path="${selfdir}/lib1" --libs fragment-groups
+}
+
+fragment_groups_composite_body()
+{
+	atf_check \
+		-o inline:'-Wl,--start-group -la -lb -Wl,--end-group -nodefaultlibs -Wl,--start-group -la -lgcc -Wl,--end-group -Wl,--gc-sections\n' \
+		pkgconf --with-path="${selfdir}/lib1" --libs fragment-groups-2
+}
+
+truncated_body()
+{
+	atf_check \
+		-o match:warning -s exit:1 \
+		pkgconf --with-path="${selfdir}/lib1" --validate truncated
+}
+
+c_comment_body()
+{
+	atf_check \
+		-o match:warning \
+		pkgconf --with-path="${selfdir}/lib1" --validate c-comment
+}
+
+fragment_tree_body()
+{
+	atf_check \
+		-o inline:"'-Wl,--start-group' [untyped]
+  '-la' [type l]
+  '-lb' [type l]
+  '-Wl,--end-group' [untyped]
+
+'-nodefaultlibs' [untyped]
+'-Wl,--start-group' [untyped]
+  '-la' [type l]
+  '-lgcc' [type l]
+  '-Wl,--end-group' [untyped]
+
+'-Wl,--gc-sections' [untyped]
+
+" \
+		pkgconf --with-path="${selfdir}/lib1" --fragment-tree fragment-groups-2
+}
+

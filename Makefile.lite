@@ -16,6 +16,7 @@ SRCS = \
 	libpkgconf/argvsplit.c		\
 	libpkgconf/audit.c		\
 	libpkgconf/bsdstubs.c		\
+	libpkgconf/buffer.c		\
 	libpkgconf/cache.c		\
 	libpkgconf/client.c		\
 	libpkgconf/dependency.c		\
@@ -39,7 +40,7 @@ all: pkgconf-lite
 libpkgconf/config.h:
 	@echo '#define PACKAGE_NAME "pkgconf-lite"' >> $@
 	@echo '#define PACKAGE_BUGREPORT "https://git.dereferenced.org/pkgconf/pkgconf/issues"' >> $@
-	@echo '#define PACKAGE_VERSION "2.3.0"' >> $@
+	@echo '#define PACKAGE_VERSION "2.5.1"' >> $@
 	@echo '#define PACKAGE PACKAGE_NAME " " PACKAGE_VERSION' >> $@
 	@echo '#define HAVE_STRLCPY' >> $@
 	@echo '#define HAVE_STRLCAT' >> $@

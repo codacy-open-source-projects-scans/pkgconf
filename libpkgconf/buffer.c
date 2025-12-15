@@ -32,6 +32,18 @@ target_allocation_size(size_t target_size)
 	return 4096 + (4096 * (target_size / 4096));
 }
 
+#if 0
+static void
+buffer_debug(pkgconf_buffer_t *buffer)
+{
+	for (char *c = buffer->base; c <= buffer->end; c++) {
+		fprintf(stderr, "%02x ", (unsigned char) *c);
+	}
+
+	fprintf(stderr, "\n");
+}
+#endif
+
 void
 pkgconf_buffer_append(pkgconf_buffer_t *buffer, const char *text)
 {
@@ -48,7 +60,31 @@ pkgconf_buffer_append(pkgconf_buffer_t *buffer, const char *text)
 	pkgconf_strlcpy(newend, text, needed);
 
 	buffer->base = newbase;
-	buffer->end = newend + needed;
+	buffer->end = newend + (needed - 1);
+
+	*buffer->end = '\0';
+}
+
+void
+pkgconf_buffer_append_fmt(pkgconf_buffer_t *buffer, const char *fmt, ...)
+{
+	va_list va;
+	char *buf;
+	size_t needed;
+
+	va_start(va, fmt);
+	needed = vsnprintf(NULL, 0, fmt, va) + 1;
+	va_end(va);
+
+	buf = malloc(needed);
+
+	va_start(va, fmt);
+	vsnprintf(buf, needed, fmt, va);
+	va_end(va);
+
+	pkgconf_buffer_append(buffer, buf);
+
+	free(buf);
 }
 
 void
@@ -84,4 +120,14 @@ void
 pkgconf_buffer_finalize(pkgconf_buffer_t *buffer)
 {
 	free(buffer->base);
+	buffer->base = buffer->end = NULL;
+}
+
+void
+pkgconf_buffer_fputs(pkgconf_buffer_t *buffer, FILE *out)
+{
+	if (pkgconf_buffer_len(buffer) != 0)
+		fputs(pkgconf_buffer_str(buffer), out);
+
+	fputc('\n', out);
 }

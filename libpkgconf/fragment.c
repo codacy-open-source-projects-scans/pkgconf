@@ -568,30 +568,20 @@ fragment_render_len(const pkgconf_list_t *list, bool escape)
 }
 
 static inline size_t
-fragment_render_item(const pkgconf_fragment_t *frag, char *bptr, size_t bufremain)
+fragment_render_item(const pkgconf_fragment_t *frag, pkgconf_buffer_t *buf, char delim)
 {
 	const pkgconf_node_t *iter;
-	char *base = bptr;
 
 	char *quoted = fragment_quote(frag);
 	if (quoted == NULL)
 		return 0;
 
-	if (strlen(quoted) > bufremain)
-	{
-		free(quoted);
-		return 0;
-	}
-
 	if (frag->type)
-	{
-		*bptr++ = '-';
-		*bptr++ = frag->type;
-	}
+		pkgconf_buffer_append_fmt(buf, "-%c", frag->type);
 
 	if (quoted != NULL)
 	{
-		bptr += pkgconf_strlcpy(bptr, quoted, bufremain - (bptr - base));
+		pkgconf_buffer_append(buf, quoted);
 		free(quoted);
 	}
 
@@ -599,33 +589,27 @@ fragment_render_item(const pkgconf_fragment_t *frag, char *bptr, size_t bufremai
 	{
 		const pkgconf_fragment_t *child_frag = iter->data;
 
-		*bptr++ = ' ';
-		bptr += fragment_render_item(child_frag, bptr, bufremain - (bptr - base));
+		pkgconf_buffer_push_byte(buf, delim);
+		fragment_render_item(child_frag, buf, delim);
 	}
 
-	return bptr - base;
+	return pkgconf_buffer_len(buf);
 }
 
 static void
-fragment_render_buf(const pkgconf_list_t *list, char *buf, size_t buflen, bool escape)
+fragment_render_buf(const pkgconf_list_t *list, pkgconf_buffer_t *buf, bool escape, char delim)
 {
 	(void) escape;
 
 	pkgconf_node_t *node;
-	char *bptr = buf;
-
-	memset(buf, 0, buflen);
 
 	PKGCONF_FOREACH_LIST_ENTRY(list->head, node)
 	{
 		const pkgconf_fragment_t *frag = node->data;
-		size_t buf_remaining = buflen - (bptr - buf);
-		size_t written = fragment_render_item(frag, bptr, buf_remaining);
-
-		bptr += written;
+		fragment_render_item(frag, buf, delim);
 
 		if (node->next != NULL)
-			*bptr++ = ' ';
+			pkgconf_buffer_push_byte(buf, delim);
 	}
 }
 
@@ -659,7 +643,7 @@ pkgconf_fragment_render_len(const pkgconf_list_t *list, bool escape, const pkgco
 /*
  * !doc
  *
- * .. c:function:: void pkgconf_fragment_render_buf(const pkgconf_list_t *list, char *buf, size_t buflen, bool escape, const pkgconf_fragment_render_ops_t *ops)
+ * .. c:function:: void pkgconf_fragment_render_buf(const pkgconf_list_t *list, char *buf, size_t buflen, bool escape, const pkgconf_fragment_render_ops_t *ops, char delim)
  *
  *    Renders a `fragment list` into a buffer.
  *
@@ -668,41 +652,16 @@ pkgconf_fragment_render_len(const pkgconf_list_t *list, bool escape, const pkgco
  *    :param size_t buflen: The length of the buffer.
  *    :param bool escape: Whether or not to escape special shell characters (deprecated).
  *    :param pkgconf_fragment_render_ops_t* ops: An optional ops structure to use for custom renderers, else ``NULL``.
+ *    :param char delim: The delimiter to use between fragments.
  *    :return: nothing
  */
 void
-pkgconf_fragment_render_buf(const pkgconf_list_t *list, char *buf, size_t buflen, bool escape, const pkgconf_fragment_render_ops_t *ops)
+pkgconf_fragment_render_buf(const pkgconf_list_t *list, pkgconf_buffer_t *buf, bool escape, const pkgconf_fragment_render_ops_t *ops, char delim)
 {
 	(void) escape;
 
 	ops = ops != NULL ? ops : &default_render_ops;
-	ops->render_buf(list, buf, buflen, true);
-}
-
-/*
- * !doc
- *
- * .. c:function:: char *pkgconf_fragment_render(const pkgconf_list_t *list)
- *
- *    Allocate memory and render a `fragment list` into it.
- *
- *    :param pkgconf_list_t* list: The `fragment list` being rendered.
- *    :param bool escape: Whether or not to escape special shell characters (deprecated).
- *    :param pkgconf_fragment_render_ops_t* ops: An optional ops structure to use for custom renderers, else ``NULL``.
- *    :return: An allocated string containing the rendered `fragment list`.
- *    :rtype: char *
- */
-char *
-pkgconf_fragment_render(const pkgconf_list_t *list, bool escape, const pkgconf_fragment_render_ops_t *ops)
-{
-	(void) escape;
-
-	size_t buflen = pkgconf_fragment_render_len(list, true, ops);
-	char *buf = calloc(1, buflen);
-
-	pkgconf_fragment_render_buf(list, buf, buflen, true, ops);
-
-	return buf;
+	ops->render_buf(list, buf, true, delim);
 }
 
 /*

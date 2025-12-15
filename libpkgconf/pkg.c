@@ -389,13 +389,40 @@ is_path_prefix_equal(const char *path1, const char *path2, size_t path2_len)
 #endif
 }
 
+static inline const char *
+lookup_val_from_env(const char *pkg_id, const char *keyword)
+{
+	char env_var[PKGCONF_ITEM_SIZE];
+	char *c;
+
+	snprintf(env_var, sizeof env_var, "PKG_CONFIG_%s_%s", pkg_id, keyword);
+
+	for (c = env_var; *c; c++)
+	{
+		*c = toupper((unsigned char) *c);
+
+		if (!isalnum((unsigned char) *c))
+			*c = '_';
+	}
+
+	return getenv(env_var);
+}
+
 static void
 pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *keyword, const char *value)
 {
 	char canonicalized_value[PKGCONF_ITEM_SIZE];
 	pkgconf_pkg_t *pkg = opaque;
+	const char *env_content;
 
 	(void) warnprefix;
+
+	env_content = lookup_val_from_env(pkg->id, keyword);
+	if (env_content != NULL)
+	{
+		PKGCONF_TRACE(pkg->owner, "overriding %s from environment", keyword);
+		value = env_content;
+	}
 
 	pkgconf_strlcpy(canonicalized_value, value, sizeof canonicalized_value);
 	canonicalize_path(canonicalized_value);
@@ -925,13 +952,6 @@ pkgconf_pkg_find(pkgconf_client_t *client, const char *name)
 		}
 	}
 
-	/* check builtins */
-	if ((pkg = pkgconf_builtin_pkg_get(name)) != NULL)
-	{
-		PKGCONF_TRACE(client, "%s is a builtin", name);
-		return pkg;
-	}
-
 	/* check cache */
 	if (!(client->flags & PKGCONF_PKG_PKGF_NO_CACHE))
 	{
@@ -1097,105 +1117,6 @@ pkgconf_compare_version(const char *a, const char *b)
 		return -1;
 
 	return 1;
-}
-
-static pkgconf_pkg_t pkg_config_virtual = {
-	.id = "pkg-config",
-	.realname = "pkg-config",
-	.description = "virtual package defining pkg-config API version supported",
-	.url = PACKAGE_BUGREPORT,
-	.version = PACKAGE_VERSION,
-	.flags = PKGCONF_PKG_PROPF_STATIC,
-	.vars = {
-		.head = &(pkgconf_node_t){
-			.next = &(pkgconf_node_t){
-				.next = &(pkgconf_node_t){
-					.data = &(pkgconf_tuple_t){
-						.key = "pc_system_libdirs",
-						.value = SYSTEM_LIBDIR,
-					}
-				},
-				.data = &(pkgconf_tuple_t){
-					.key = "pc_system_includedirs",
-					.value = SYSTEM_INCLUDEDIR,
-				}
-			},
-			.data = &(pkgconf_tuple_t){
-				.key = "pc_path",
-				.value = PKG_DEFAULT_PATH,
-			},
-		},
-		.tail = NULL,
-	}
-};
-
-static pkgconf_pkg_t pkgconf_virtual = {
-	.id = "pkgconf",
-	.realname = "pkgconf",
-	.description = "virtual package defining pkgconf API version supported",
-	.url = PACKAGE_BUGREPORT,
-	.version = PACKAGE_VERSION,
-	.license = "ISC",
-	.flags = PKGCONF_PKG_PROPF_STATIC,
-	.vars = {
-		.head = &(pkgconf_node_t){
-			.next = &(pkgconf_node_t){
-				.next = &(pkgconf_node_t){
-					.data = &(pkgconf_tuple_t){
-						.key = "pc_system_libdirs",
-						.value = SYSTEM_LIBDIR,
-					}
-				},
-				.data = &(pkgconf_tuple_t){
-					.key = "pc_system_includedirs",
-					.value = SYSTEM_INCLUDEDIR,
-				}
-			},
-			.data = &(pkgconf_tuple_t){
-				.key = "pc_path",
-				.value = PKG_DEFAULT_PATH,
-			},
-		},
-		.tail = NULL,
-	},
-};
-
-typedef struct {
-	const char *name;
-	pkgconf_pkg_t *pkg;
-} pkgconf_builtin_pkg_pair_t;
-
-/* keep these in alphabetical order */
-static const pkgconf_builtin_pkg_pair_t pkgconf_builtin_pkg_pair_set[] = {
-	{"pkg-config", &pkg_config_virtual},
-	{"pkgconf", &pkgconf_virtual},
-};
-
-static int pkgconf_builtin_pkg_pair_cmp(const void *key, const void *ptr)
-{
-	const pkgconf_builtin_pkg_pair_t *pair = ptr;
-	return strcasecmp(key, pair->name);
-}
-
-/*
- * !doc
- *
- * .. c:function:: pkgconf_pkg_t *pkgconf_builtin_pkg_get(const char *name)
- *
- *    Looks up a built-in package.  The package should not be freed or dereferenced.
- *
- *    :param char* name: An atom corresponding to a built-in package to search for.
- *    :return: the built-in package if present, else ``NULL``.
- *    :rtype: pkgconf_pkg_t *
- */
-pkgconf_pkg_t *
-pkgconf_builtin_pkg_get(const char *name)
-{
-	const pkgconf_builtin_pkg_pair_t *pair = bsearch(name, pkgconf_builtin_pkg_pair_set,
-		PKGCONF_ARRAY_SIZE(pkgconf_builtin_pkg_pair_set), sizeof(pkgconf_builtin_pkg_pair_t),
-		pkgconf_builtin_pkg_pair_cmp);
-
-	return (pair != NULL) ? pair->pkg : NULL;
 }
 
 typedef bool (*pkgconf_vercmp_res_func_t)(const char *a, const char *b);

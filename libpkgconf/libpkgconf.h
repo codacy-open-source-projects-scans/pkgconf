@@ -22,29 +22,13 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <libpkgconf/libpkgconf-api.h>
 #include <libpkgconf/iter.h>
 #include <libpkgconf/bsdstubs.h>
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-/* pkg-config uses ';' on win32 as ':' is part of path */
-#ifdef _WIN32
-#define PKG_CONFIG_PATH_SEP_S   ";"
-#else
-#define PKG_CONFIG_PATH_SEP_S   ":"
-#endif
-
-#ifdef _WIN32
-#define PKG_DIR_SEP_S   '\\'
-#else
-#define PKG_DIR_SEP_S   '/'
-#endif
-
-#ifdef _WIN32
-#define realpath(N,R) _fullpath((R),(N),_MAX_PATH)
 #endif
 
 #define PKGCONF_BUFSIZE	(65535)
@@ -308,6 +292,7 @@ PKGCONF_API void pkgconf_cross_personality_deinit(pkgconf_cross_personality_t *p
 #define PKGCONF_PKG_PKGF_DONT_MERGE_SPECIAL_FRAGMENTS	0x4000
 #define PKGCONF_PKG_PKGF_FDO_SYSROOT_RULES		0x8000
 #define PKGCONF_PKG_PKGF_PKGCONF1_SYSROOT_RULES         0x10000
+#define PKGCONF_PKG_PKGF_REQUIRE_INTERNAL		0x20000
 
 #define PKGCONF_PKG_DEPF_INTERNAL		0x1
 #define PKGCONF_PKG_DEPF_PRIVATE		0x2
@@ -459,6 +444,8 @@ PKGCONF_API void pkgconf_buffer_push_byte(pkgconf_buffer_t *buffer, char byte);
 PKGCONF_API void pkgconf_buffer_trim_byte(pkgconf_buffer_t *buffer);
 PKGCONF_API void pkgconf_buffer_finalize(pkgconf_buffer_t *buffer);
 PKGCONF_API void pkgconf_buffer_fputs(pkgconf_buffer_t *buffer, FILE *out);
+PKGCONF_API void pkgconf_buffer_vjoin(pkgconf_buffer_t *buffer, char delim, va_list va);
+PKGCONF_API void pkgconf_buffer_join(pkgconf_buffer_t *buffer, char delim, ...);
 static inline const char *pkgconf_buffer_str(const pkgconf_buffer_t *buffer) {
 	return buffer->base;
 }
@@ -483,6 +470,15 @@ static inline char pkgconf_buffer_lastc(const pkgconf_buffer_t *buffer) {
 static inline void pkgconf_buffer_reset(pkgconf_buffer_t *buffer) {
 	pkgconf_buffer_finalize(buffer);
 	buffer->base = buffer->end = NULL;
+}
+
+static inline char *pkgconf_buffer_freeze(pkgconf_buffer_t *buffer) {
+	if (buffer->base == NULL)
+		return NULL;
+
+	char *out = strdup(pkgconf_buffer_str(buffer));
+	pkgconf_buffer_reset(buffer);
+	return out;
 }
 
 /* fileio.c */

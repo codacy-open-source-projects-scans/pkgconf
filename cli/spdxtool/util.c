@@ -9,6 +9,7 @@
  */
 
 #include <libpkgconf/libpkgconf.h>
+#include <libpkgconf/stdinc.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -135,6 +136,8 @@ spdxtool_util_get_spdx_license(pkgconf_client_t *client)
 	return pkgconf_tuple_find_global(client, "spdx_license");
 }
 
+static size_t last_id = 0;
+
 /*
  * !doc
  *
@@ -151,53 +154,12 @@ char *
 spdxtool_util_get_spdx_id_int(pkgconf_client_t *client, char *part)
 {
 	const 	char *global_xsd_any_uri = spdxtool_util_get_uri_root(client);
-	char *current_string = NULL;
-	long current_id = 1;
+	pkgconf_buffer_t current_uri = PKGCONF_BUFFER_INITIALIZER;
 
-	while(1)
-	{
-		/* Finds available ID in current namespace */
-		if(asprintf(&current_string, "%s/%s/%ld", global_xsd_any_uri, part, current_id) < 0)
-		{
-			pkgconf_error(client, "Can't create spdx ID. Memory exhausted!");
-			return NULL;
-		}
+	pkgconf_buffer_join(&current_uri, '/', global_xsd_any_uri, part, NULL);
+	pkgconf_buffer_append_fmt(&current_uri, "/" SIZE_FMT_SPECIFIER, ++last_id);
 
-		if(!pkgconf_tuple_find_global(client, current_string))
-		{
-			break;
-		}
-
-		current_id ++;
-		free(current_string);
-		current_string = NULL;
-	}
-
-	spdxtool_util_set_key(client, current_string, part, "Reserved");
-
-	return current_string;
-}
-
-/*
- * !doc
- *    bool spdxtool_util_spdx_id_add(pkgconf_client_t *client, char *spdx_id)char *spdxtool_util_get_spdx_id_int(pkgconf_client_t *client, char *part)
- *
- *    Test if spdxId is reserved and if not add it
- *
- *    :param pkgconf_client_t* client: The pkgconf client being accessed.
- *    :param char *spdx_id: spdxId to test and add
- *    :return: True if add. False if already added.
- */
-bool
-spdxtool_util_spdx_id_add(pkgconf_client_t *client, char *spdx_id)
-{
-	if(!pkgconf_tuple_find_global(client, spdx_id))
-	{
-		spdxtool_util_set_key(client, spdx_id, "Reserved", "Reserved");
-		return true;
-	}
-
-	return false;
+	return pkgconf_buffer_freeze(&current_uri);
 }
 
 /*
@@ -217,15 +179,11 @@ char *
 spdxtool_util_get_spdx_id_string(pkgconf_client_t *client, char *part, char *string_id)
 {
 	const 	char *global_xsd_any_uri = spdxtool_util_get_uri_root(client);
-	char *current_string = NULL;
+	pkgconf_buffer_t current_uri = PKGCONF_BUFFER_INITIALIZER;
 
-	if(asprintf(&current_string, "%s/%s/%s", global_xsd_any_uri, part, string_id) < 0)
-	{
-		pkgconf_error(client, "Can't create spdx ID. Memory exhausted!");
-		return NULL;
-	}
+	pkgconf_buffer_join(&current_uri, '/', global_xsd_any_uri, part, string_id, NULL);
 
-	return current_string;
+	return pkgconf_buffer_freeze(&current_uri);
 }
 
 /*
@@ -241,25 +199,15 @@ spdxtool_util_get_spdx_id_string(pkgconf_client_t *client, char *part, char *str
 char *
 spdxtool_util_get_iso8601_time(time_t *wanted_time)
 {
-	char *buf = NULL;
+	char buf[PKGCONF_ITEM_SIZE];
 	struct tm *tm_info = gmtime(wanted_time);
 
 	if(!wanted_time)
-	{
 		return NULL;
-	}
 
-	buf = calloc(1, 21);
-
-	if(!buf)
-	{
-		pkgconf_error(NULL, "Memory exhausted! Can't create ISO8601 time.");
-		return NULL;
-	}
-
-	/* ISO8061 time with Z at the end */
-	strftime(buf, 21, "%FT%TZ", tm_info);
-	return buf;
+	/* ISO8601 time with Z at the end */
+	strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", tm_info);
+	return strdup(buf);
 }
 
 /*
@@ -297,7 +245,7 @@ spdxtool_util_string_correction(char *str)
 	for ( ; *ptr; ++ptr)
 	{
 		*ptr = tolower(*ptr);
-		if(isspace(*ptr))
+		if(isspace((unsigned char) *ptr))
 		{
 			*ptr = '_';
 		}

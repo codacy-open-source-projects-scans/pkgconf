@@ -21,10 +21,6 @@
 #ifndef PKGCONF_LITE
 #include "renderer-msvc.h"
 #endif
-#ifdef _WIN32
-#include <io.h>     /* for _setmode() */
-#include <fcntl.h>
-#endif
 
 #define PKG_CFLAGS_ONLY_I		(((uint64_t) 1) << 2)
 #define PKG_CFLAGS_ONLY_OTHER		(((uint64_t) 1) << 3)
@@ -89,8 +85,8 @@ static size_t maximum_package_count = 0;
 static char *want_variable = NULL;
 static char *want_fragment_filter = NULL;
 
-FILE *error_msgout = NULL;
-FILE *logfile_out = NULL;
+static FILE *error_msgout = NULL;
+static FILE *logfile_out = NULL;
 
 static bool
 error_handler(const char *msg, const pkgconf_client_t *client, void *data)
@@ -1513,6 +1509,10 @@ main(int argc, char *argv[])
 
 	if ((want_flags & PKG_INTERNAL_CFLAGS) == PKG_INTERNAL_CFLAGS)
 		want_client_flags |= PKGCONF_PKG_PKGF_DONT_FILTER_INTERNAL_CFLAGS;
+
+	/* --static --libs, --exists require the full dependency graph to be solved */
+	if ((want_flags & (PKG_STATIC|PKG_LIBS)) == (PKG_STATIC|PKG_LIBS) || (want_flags & PKG_EXISTS) == PKG_EXISTS)
+		want_client_flags |= PKGCONF_PKG_PKGF_REQUIRE_INTERNAL;
 
 	/* if these selectors are used, it means that we are querying metadata.
 	 * so signal to libpkgconf that we only want to walk the flattened dependency set.

@@ -17,15 +17,6 @@
 #include <libpkgconf/stdinc.h>
 #include <libpkgconf/libpkgconf.h>
 
-#ifndef _WIN32
-#include <fcntl.h>    // open
-#include <libgen.h>   // basename/dirname
-#include <sys/stat.h> // lstat, S_ISLNK
-#include <unistd.h>   // close, readlinkat
-
-#include <string.h>
-#endif
-
 /*
  * !doc
  *
@@ -35,13 +26,6 @@
  * The `pkg` module provides dependency resolution services and the overall `.pc` file parsing
  * routines.
  */
-
-#ifdef _WIN32
-#	undef PKG_DEFAULT_PATH
-#	define PKG_DEFAULT_PATH "../lib/pkgconfig;../share/pkgconfig"
-#	define strncasecmp _strnicmp
-#	define strcasecmp _stricmp
-#endif
 
 #define PKG_CONFIG_EXT ".pc"
 
@@ -215,10 +199,14 @@ pkgconf_pkg_parser_fragment_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg, c
 static void
 pkgconf_pkg_parser_dependency_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg, const char *keyword, const char *warnprefix, const ptrdiff_t offset, const char *value)
 {
-	(void) keyword;
-	(void) warnprefix;
-
 	pkgconf_list_t *dest = (pkgconf_list_t *)((char *) pkg + offset);
+
+	if (dest->tail != NULL)
+	{
+		pkgconf_warn(client, "%s: warning: merging duplicate field '%s' (undefined behavior)\n",
+			     warnprefix, keyword);
+	}
+
 	pkgconf_dependency_parse(client, pkg, dest, value, 0);
 }
 
@@ -226,10 +214,14 @@ pkgconf_pkg_parser_dependency_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg,
 static void
 pkgconf_pkg_parser_internal_dependency_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg, const char *keyword, const char *warnprefix, const ptrdiff_t offset, const char *value)
 {
-	(void) keyword;
-	(void) warnprefix;
-
 	pkgconf_list_t *dest = (pkgconf_list_t *)((char *) pkg + offset);
+
+	if (dest->tail != NULL)
+	{
+		pkgconf_warn(client, "%s: warning: merging duplicate field '%s' (undefined behavior)\n",
+			     warnprefix, keyword);
+	}
+
 	pkgconf_dependency_parse(client, pkg, dest, value, PKGCONF_PKG_DEPF_INTERNAL);
 }
 
@@ -237,10 +229,14 @@ pkgconf_pkg_parser_internal_dependency_func(pkgconf_client_t *client, pkgconf_pk
 static void
 pkgconf_pkg_parser_private_dependency_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg, const char *keyword, const char *warnprefix, const ptrdiff_t offset, const char *value)
 {
-	(void) keyword;
-	(void) warnprefix;
-
 	pkgconf_list_t *dest = (pkgconf_list_t *)((char *) pkg + offset);
+
+	if (dest->tail != NULL)
+	{
+		pkgconf_warn(client, "%s: warning: merging duplicate field '%s' (undefined behavior)\n",
+			     warnprefix, keyword);
+	}
+
 	pkgconf_dependency_parse(client, pkg, dest, value, PKGCONF_PKG_DEPF_PRIVATE);
 }
 
@@ -637,7 +633,8 @@ pkgconf_pkg_new_from_path(pkgconf_client_t *client, const char *filename, unsign
 	 * package.
 	 * See https://github.com/pkgconf/pkgconf/issues/213
 	 */
-	if (client->sysroot_dir && strncmp(pkg->pc_filedir, client->sysroot_dir, strlen(client->sysroot_dir)))
+	if (client->sysroot_dir != NULL && strncmp(pkg->pc_filedir, client->sysroot_dir, strlen(client->sysroot_dir)) &&
+	    !(client->flags & PKGCONF_PKG_PKGF_PKGCONF1_SYSROOT_RULES))
 		pkgconf_tuple_add(client, &pkg->vars, "pc_sysrootdir", "", false, pkg->flags);
 
 	/* make module id */
@@ -1506,7 +1503,7 @@ pkgconf_pkg_report_graph_error(pkgconf_client_t *client, pkgconf_pkg_t *parent, 
 {
 	if (eflags & PKGCONF_PKG_ERRF_PACKAGE_NOT_FOUND)
 	{
-		if (!(client->flags & PKGCONF_PKG_PKGF_SIMPLIFY_ERRORS) & !client->already_sent_notice)
+		if (!(client->flags & PKGCONF_PKG_PKGF_SIMPLIFY_ERRORS) && !client->already_sent_notice)
 		{
 			pkgconf_error(client, "Package %s was not found in the pkg-config search path.\n", node->package);
 			pkgconf_error(client, "Perhaps you should add the directory containing `%s.pc'\n", node->package);
@@ -1537,6 +1534,18 @@ pkgconf_pkg_report_graph_error(pkgconf_client_t *client, pkgconf_pkg_t *parent, 
 	return eflags;
 }
 
+static inline bool
+missing_node_is_tolerable(const pkgconf_client_t *client, const pkgconf_dependency_t *dep)
+{
+	if (!(dep->flags & PKGCONF_PKG_DEPF_INTERNAL))
+		return false;
+
+	if ((client->flags & PKGCONF_PKG_PKGF_REQUIRE_INTERNAL))
+		return false;
+
+	return true;
+}
+
 static inline unsigned int
 pkgconf_pkg_walk_list(pkgconf_client_t *client,
 	pkgconf_pkg_t *parent,
@@ -1561,15 +1570,17 @@ pkgconf_pkg_walk_list(pkgconf_client_t *client,
 			continue;
 
 		pkgdep = pkgconf_pkg_verify_dependency(client, depnode, &eflags_local);
-
-		eflags |= eflags_local;
-		if (eflags_local != PKGCONF_PKG_ERRF_OK && !(client->flags & PKGCONF_PKG_PKGF_SKIP_ERRORS))
+		if (eflags_local != PKGCONF_PKG_ERRF_OK)
 		{
-			pkgconf_pkg_report_graph_error(client, parent, pkgdep, depnode, eflags_local);
+			if (missing_node_is_tolerable(client, depnode))
+				continue;
+
+			if (!(client->flags & PKGCONF_PKG_PKGF_SKIP_ERRORS))
+				pkgconf_pkg_report_graph_error(client, parent, pkgdep, depnode, eflags_local);
+
+			eflags |= eflags_local;
 			continue;
 		}
-		if (pkgdep == NULL)
-			continue;
 
 		if((pkgdep->flags & PKGCONF_PKG_PROPF_ANCESTOR) != 0)
 		{

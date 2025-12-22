@@ -463,12 +463,18 @@ pkgconf_trace(const pkgconf_client_t *client, const char *filename, size_t linen
 
 	finallen = snprintf(NULL, 0, "%s %s\n", prefix, errbuf);
 	if (finallen < 0)
+	{
+		free(errbuf);
 		return false;
+	}
 
 	finallen++;
 	finalbuf = calloc(1, finallen);
 	if (finalbuf == NULL)
+	{
+		free(errbuf);
 		return false;
+	}
 
 	snprintf(finalbuf, finallen, "%s %s\n", prefix, errbuf);
 	ret = client->trace_handler(finalbuf, client, client->trace_handler_data);
@@ -816,7 +822,7 @@ pkgconf_client_preload_from_environ(pkgconf_client_t *client, const char *env)
 	const char *data;
 	pkgconf_list_t pathlist = PKGCONF_LIST_INITIALIZER;
 	pkgconf_node_t *n;
-	bool ret;
+	bool ret = true;
 
 	data = getenv(env);
 	if (data == NULL)

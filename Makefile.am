@@ -189,6 +189,7 @@ libpkgconf_la_SOURCES  =	\
 		libpkgconf/tuple.c		\
 		libpkgconf/dependency.c		\
 		libpkgconf/queue.c		\
+		libpkgconf/output.c		\
 		libpkgconf/path.c		\
 		libpkgconf/personality.c	\
 		libpkgconf/parser.c
@@ -204,10 +205,12 @@ dist_man_MANS    = 		\
 pkgconf_LDADD    = libpkgconf.la
 pkgconf_SOURCES  = \
 	cli/main.c				\
+	cli/core.c				\
 	cli/getopt_long.c			\
 	cli/renderer-msvc.c
 pkgconf_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli
 noinst_HEADERS   = \
+	cli/core.h						\
 	cli/getopt_long.h					\
 	cli/renderer-msvc.h					\
 	cli/spdxtool/core.h					\

@@ -386,7 +386,7 @@ is_path_prefix_equal(const char *path1, const char *path2, size_t path2_len)
 }
 
 static inline const char *
-lookup_val_from_env(const char *pkg_id, const char *keyword)
+lookup_val_from_env(const pkgconf_client_t *client, const char *pkg_id, const char *keyword)
 {
 	char env_var[PKGCONF_ITEM_SIZE];
 	char *c;
@@ -401,7 +401,7 @@ lookup_val_from_env(const char *pkg_id, const char *keyword)
 			*c = '_';
 	}
 
-	return getenv(env_var);
+	return pkgconf_client_getenv(client, env_var);
 }
 
 static void
@@ -413,7 +413,7 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 
 	(void) warnprefix;
 
-	env_content = lookup_val_from_env(pkg->id, keyword);
+	env_content = lookup_val_from_env(pkg->owner, pkg->id, keyword);
 	if (env_content != NULL)
 	{
 		PKGCONF_TRACE(pkg->owner, "overriding %s from environment", keyword);
@@ -1253,7 +1253,7 @@ static const pkgconf_pkg_provides_vermatch_rule_t pkgconf_pkg_provides_vermatch_
                 },
 		.depcmp = {
 			[PKGCONF_CMP_ANY]			= pkgconf_pkg_comparator_none,
-                },
+		},
 	},
 	[PKGCONF_CMP_LESS_THAN] = {
 		.rulecmp = {
@@ -1327,7 +1327,7 @@ static const pkgconf_pkg_provides_vermatch_rule_t pkgconf_pkg_provides_vermatch_
 		},
 		.depcmp = {
 			[PKGCONF_CMP_ANY]			= pkgconf_pkg_comparator_none,
-                },
+		},
 	},
 	[PKGCONF_CMP_NOT_EQUAL] = {
 		.rulecmp = {
@@ -1341,7 +1341,7 @@ static const pkgconf_pkg_provides_vermatch_rule_t pkgconf_pkg_provides_vermatch_
 		},
 		.depcmp = {
 			[PKGCONF_CMP_ANY]			= pkgconf_pkg_comparator_none,
-                },
+		},
 	},
 };
 

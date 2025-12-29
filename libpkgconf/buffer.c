@@ -66,25 +66,35 @@ pkgconf_buffer_append(pkgconf_buffer_t *buffer, const char *text)
 }
 
 void
-pkgconf_buffer_append_fmt(pkgconf_buffer_t *buffer, const char *fmt, ...)
+pkgconf_buffer_append_vfmt(pkgconf_buffer_t *buffer, const char *fmt, va_list src_va)
 {
 	va_list va;
 	char *buf;
 	size_t needed;
 
-	va_start(va, fmt);
+	va_copy(va, src_va);
 	needed = vsnprintf(NULL, 0, fmt, va) + 1;
 	va_end(va);
 
 	buf = malloc(needed);
 
-	va_start(va, fmt);
+	va_copy(va, src_va);
 	vsnprintf(buf, needed, fmt, va);
 	va_end(va);
 
 	pkgconf_buffer_append(buffer, buf);
 
 	free(buf);
+}
+
+void
+pkgconf_buffer_append_fmt(pkgconf_buffer_t *buffer, const char *fmt, ...)
+{
+	va_list va;
+
+	va_start(va, fmt);
+	pkgconf_buffer_append_vfmt(buffer, fmt, va);
+	va_end(va);
 }
 
 void
@@ -159,4 +169,25 @@ pkgconf_buffer_join(pkgconf_buffer_t *buffer, char delim, ...)
 	va_start(va, delim);
 	pkgconf_buffer_vjoin(buffer, delim, va);
 	va_end(va);
+}
+
+bool
+pkgconf_buffer_contains(const pkgconf_buffer_t *haystack, const pkgconf_buffer_t *needle)
+{
+	const char *haystack_str = pkgconf_buffer_str_or_empty(haystack);
+	const char *needle_str = pkgconf_buffer_str_or_empty(needle);
+
+	return strstr(haystack_str, needle_str) != NULL;
+}
+
+bool
+pkgconf_buffer_match(const pkgconf_buffer_t *haystack, const pkgconf_buffer_t *needle)
+{
+	const char *haystack_str = pkgconf_buffer_str_or_empty(haystack);
+	const char *needle_str = pkgconf_buffer_str_or_empty(needle);
+
+	if (pkgconf_buffer_len(haystack) != pkgconf_buffer_len(needle))
+		return false;
+
+	return memcmp(haystack_str, needle_str, pkgconf_buffer_len(haystack)) == 0;
 }

@@ -149,7 +149,7 @@ bomtool_exe = executable('bomtool',
   include_directories : cli_include,
   install : true)
 
-bomtool_exe = executable('spdxtool',
+spdxtool_exe = executable('spdxtool',
   'cli/spdxtool/main.c',
   'cli/spdxtool/core.c',
   'cli/spdxtool/software.c',
@@ -161,6 +161,29 @@ bomtool_exe = executable('spdxtool',
   c_args : build_static,
   include_directories : include_directories('cli', 'cli/spdxtool'),
   install : true)
+
+test_runner_exe = executable('test-runner',
+  'cli/core.c',
+  'cli/getopt_long.c',
+  'cli/renderer-msvc.c',
+  'tests/test-runner.c',
+  link_with : libpkgconf,
+  c_args : build_static,
+  include_directories : cli_include,
+  install : true)
+
+fixtures_dir = '@0@/tests'.format(meson.current_source_dir())
+test_suites = [
+  'basic',
+  'ordering',
+  'solver',
+  'sbom',
+  'tuple',
+]
+
+foreach t : test_suites
+  test(t, test_runner_exe, args : ['--test-fixtures', fixtures_dir, '@0@/t/@1@'.format(meson.current_source_dir(), t)])
+endforeach
 
 with_tests = get_option('tests')
 kyua_exe = find_program('kyua', required : with_tests, disabler : true, native : true)

@@ -23,6 +23,113 @@ EXTRA_DIST =	pkg.m4 \
 		libpkgconf/meson.build \
 		libpkgconf/config.h.meson \
 		libpkgconf/win-dirent.h \
+		t/basic/arbitrary-path.test \
+		t/basic/builtin-pkg-config-exists.test \
+		t/basic/builtin-pkg-config-pc_path-variable.test \
+		t/basic/builtin-pkgconf-exists.test \
+		t/basic/builtin-pkgconf-pc_path-variable.test \
+		t/basic/define-prefix.test \
+		t/basic/direct-query-with-pkg_config_path.test \
+		t/basic/env-tuple.test \
+		t/basic/exists-cflags-env.test \
+		t/basic/exists-cflags.test \
+		t/basic/exists-nonexistent.test \
+		t/basic/exists-version-greater-than-with-tilde.test \
+		t/basic/exists-version-greater-than.test \
+		t/basic/exists-version-less-than-with-tilde.test \
+		t/basic/exists-version-malformed.test \
+		t/basic/exists-version-minimum.test \
+		t/basic/exists-version-with-tilde.test \
+		t/basic/incomplete-cflags.test \
+		t/basic/incomplete-libs.test \
+		t/basic/keep-system-libs.test \
+		t/basic/keep-system-libs-2.test \
+		t/basic/libs.test \
+		t/basic/libs-cflags.test \
+		t/basic/libs-cflags-version.test \
+		t/basic/libs-cflags-version-multiple.test \
+		t/basic/libs-cflags-version-multiple-comma.test \
+		t/basic/libs-cflags-version-not.test \
+		t/basic/libs-cflags-version-not-provided.test \
+		t/basic/libs-env.test \
+		t/basic/malformed-empty-package.test \
+		t/basic/modversion-fullpath.test \
+		t/basic/modversion-noflatten.test \
+		t/basic/modversion-uninstalled.test \
+		t/basic/noargs.test \
+		t/basic/nocflags.test \
+		t/basic/nolibs.test \
+		t/basic/pkg-config-path.test \
+		t/basic/print-variables-env.test \
+		t/basic/single-depth-selectors.test \
+		t/basic/static-archive-libs.test \
+		t/basic/uninstalled-not.test \
+		t/basic/uninstalled.test \
+		t/basic/variable-env.test \
+		t/basic/variable-no-recursion.test \
+		t/basic/variable.test \
+		t/ordering/fragment-collision.test \
+		t/ordering/framework-1.test \
+		t/ordering/framework-2.test \
+		t/ordering/framework-3.test \
+		t/ordering/idirafter-munge-ordering.test \
+		t/ordering/idirafter-ordering.test \
+		t/ordering/isystem-munge-ordering.test \
+		t/solver/circular-reference-1.test \
+		t/solver/circular-reference-2.test \
+		t/solver/circular-reference-directpc.test \
+		t/solver/depgraph-break-1.test \
+		t/solver/depgraph-break-2.test \
+		t/solver/depgraph-break-3.test \
+		t/solver/libs-intermediary.test \
+		t/solver/libs-metapackage.test \
+		t/solver/libs-static-ordering.test \
+		t/solver/missing-required-dep.test \
+		t/solver/modversion-provides.test \
+		t/solver/private-libs-duplication-digraph.test \
+		t/solver/private-libs-duplication.test \
+		t/solver/provides-bar-any.test \
+		t/solver/provides-bar-versioned-equal.test \
+		t/solver/provides-bar-versioned-greater-than-equal.test \
+		t/solver/provides-bar-versioned-greater-than.test \
+		t/solver/provides-bar-versioned-less-than-equal.test \
+		t/solver/provides-bar-versioned-less-than-new.test \
+		t/solver/provides-bar-versioned-less-than-old.test \
+		t/solver/provides-bar-versioned-not-equal-old.test \
+		t/solver/provides-bar-versioned-not-equal.test \
+		t/solver/provides-foo-any.test \
+		t/solver/provides-foo-versioned-exact.test \
+		t/solver/provides-foo-versioned-greater-than-equal.test \
+		t/solver/provides-foo-versioned-greater-than.test \
+		t/solver/provides-foo-versioned-less-than-equal.test \
+		t/solver/provides-foo-versioned-less-than.test \
+		t/solver/provides-foo-versioned-not-equal.test \
+		t/solver/provides-indirect-dependency-versioned.test \
+		t/solver/provides-indirect-dependency.test \
+		t/solver/provides-print-simple.test \
+		t/solver/provides-request-simple.test \
+		t/solver/provides-request-simple-no-provides.test \
+		t/solver/query-order-1.test \
+		t/solver/query-order-2.test \
+		t/solver/requires-internal-collision.test \
+		t/solver/requires-internal-missing-nonstatic-cflags-libs.test \
+		t/solver/requires-internal-missing-nonstatic.test \
+		t/solver/requires-internal-missing-static-cflags.test \
+		t/solver/requires-internal-missing.test \
+		t/solver/requires-internal.test \
+		t/solver/requires-private-debounce.test \
+		t/solver/requires-private-missing.test \
+		t/sbom/license-file-bar.test \
+		t/sbom/license-file-foo.test \
+		t/sbom/license-isc.test \
+		t/sbom/license-noassertion.test \
+		t/sbom/source-tag-bar.test \
+		t/sbom/source-tag-foo.test \
+		t/tuple/billion-laughs.test \
+		t/tuple/case-sensitivity-1.test \
+		t/tuple/case-sensitivity-2.test \
+		t/tuple/duplicate-upsert.test \
+		t/tuple/empty-tuple.test \
 		tests/lib-relocatable/lib/pkgconfig/foo.pc \
 		tests/lib1/argv-parse-2.pc \
 		tests/lib1/billion-laughs.pc \
@@ -156,13 +263,9 @@ EXTRA_DIST =	pkg.m4 \
 		doc/libpkgconf-queue.rst \
 		doc/libpkgconf-tuple.rst
 
-test_scripts=	tests/basic.sh \
-		tests/builtins.sh \
-		tests/conflicts.sh \
-		tests/framework.sh \
+test_scripts=	tests/conflicts.sh \
 		tests/parser.sh \
 		tests/personality.sh \
-		tests/provides.sh \
 		tests/regress.sh \
 		tests/requires.sh \
 		tests/spdxtool.sh \
@@ -236,6 +339,14 @@ spdxtool_SOURCES  = \
 	cli/getopt_long.c
 spdxtool_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli -I$(top_srcdir)/cli/spdxtool
 
+noinst_PROGRAMS = test-runner
+test_runner_LDADD = libpkgconf.la
+test_runner_SOURCES = \
+	cli/core.c \
+	cli/getopt_long.c \
+	cli/renderer-msvc.c \
+	tests/test-runner.c
+
 dist_doc_DATA = README.md AUTHORS
 
 m4datadir              = $(datadir)/aclocal
@@ -244,7 +355,12 @@ m4data_DATA            = pkg.m4
 CLEANFILES =	$(EXTRA_PROGRAMS) \
 		$(check_SCRIPTS)
 
-check: pkgconf $(check_SCRIPTS)
+check: pkgconf test-runner $(check_SCRIPTS)
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/basic
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/ordering
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/solver
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/sbom
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/tuple
 	kyua --config=none test --kyuafile='$(top_builddir)/Kyuafile' \
 		--build-root='$(top_builddir)'
 

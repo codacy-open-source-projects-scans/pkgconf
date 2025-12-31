@@ -351,7 +351,7 @@ apply_path(pkgconf_client_t *client, pkgconf_pkg_t *world, void *unused, int max
 }
 
 static bool
-apply_variable(pkgconf_client_t *client, pkgconf_pkg_t *world, void *variable, int maxdepth)
+apply_variable(pkgconf_client_t *client, pkgconf_pkg_t *world, const void *variable, int maxdepth)
 {
 	pkgconf_node_t *iter;
 	(void) maxdepth;
@@ -501,7 +501,7 @@ apply_env_variables(pkgconf_client_t *client, pkgconf_pkg_t *world, const char *
 }
 
 static bool
-apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, void *env_prefix_p, int maxdepth)
+apply_env(pkgconf_client_t *client, pkgconf_pkg_t *world, const void *env_prefix_p, int maxdepth)
 {
 	pkgconf_cli_state_t *state = client->client_data;
 	const char *want_env_prefix = env_prefix_p, *it;
@@ -1139,7 +1139,7 @@ pkgconf_cli_run(pkgconf_cli_state_t *state, int argc, char *argv[], int last_arg
 		goto out;
 	}
 
-	while (argv[last_argc])
+	while (last_argc < argc && argv[last_argc])
 	{
 		if (pkgconf_buffer_len(&queryparams) > 0)
 			pkgconf_buffer_push_byte(&queryparams, ' ');

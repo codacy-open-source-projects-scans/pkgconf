@@ -68,6 +68,10 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/variable-env.test \
 		t/basic/variable-no-recursion.test \
 		t/basic/variable.test \
+		t/ordering/flag-order-1.test \
+		t/ordering/flag-order-2.test \
+		t/ordering/flag-order-3.test \
+		t/ordering/flag-order-4.test \
 		t/ordering/fragment-collision.test \
 		t/ordering/framework-1.test \
 		t/ordering/framework-2.test \
@@ -75,6 +79,27 @@ EXTRA_DIST =	pkg.m4 \
 		t/ordering/idirafter-munge-ordering.test \
 		t/ordering/idirafter-ordering.test \
 		t/ordering/isystem-munge-ordering.test \
+		t/parser/argv-parse-1.test \
+		t/parser/argv-parse-2.test \
+		t/parser/argv-parse-3.test \
+		t/parser/c-comments-should-warn.test \
+		t/parser/comments-in-fields.test \
+		t/parser/comments.test \
+		t/parser/dos-lineendings.test \
+		t/parser/escaped-backslashes-in-output.test \
+		t/parser/fragment-comment.test \
+		t/parser/fragment-groups-composite.test \
+		t/parser/fragment-groups.test \
+		t/parser/multiline-bogus-header.test \
+		t/parser/multiline-field.test \
+		t/parser/no-trailing-newline.test \
+		t/parser/paren-quoting.test \
+		t/parser/shell-quoted-output.test \
+		t/parser/tilde-quoting-1.test \
+		t/parser/tilde-quoting-2.test \
+		t/parser/truncated-files-should-fail-to-parse.test \
+		t/parser/tuple-dequote.test \
+		t/parser/variable-whitespace.test \
 		t/solver/circular-reference-1.test \
 		t/solver/circular-reference-2.test \
 		t/solver/circular-reference-directpc.test \
@@ -125,6 +150,20 @@ EXTRA_DIST =	pkg.m4 \
 		t/sbom/license-noassertion.test \
 		t/sbom/source-tag-bar.test \
 		t/sbom/source-tag-foo.test \
+		t/sysroot/cflags-rewriting.test \
+		t/sysroot/no-pc_sysrootdir-rewriting-2.test \
+		t/sysroot/no-pc_sysrootdir-rewriting-3.test \
+		t/sysroot/no-pc_sysrootdir-rewriting-4.test \
+		t/sysroot/no-pc_sysrootdir-rewriting-5.test \
+		t/sysroot/no-pc_sysrootdir-rewriting-variable.test \
+		t/sysroot/skip-rewriting-when-sysroot-dir-is-root-dir.test \
+		t/sysroot/undefined-pc_sysrootdir-should-be-empty.test \
+		t/sysroot/uninstalled-rewriting-fdo-rules-with-pc_sysrootdir.test \
+		t/sysroot/uninstalled-rewriting-fdo-rules.test \
+		t/sysroot/uninstalled-rewriting-pkgconf-1-rules.test \
+		t/sysroot/uninstalled-rewriting.test \
+		t/sysroot/variable-rewriting-1.test \
+		t/sysroot/variable-rewriting-2.test \
 		t/tuple/billion-laughs.test \
 		t/tuple/case-sensitivity-1.test \
 		t/tuple/case-sensitivity-2.test \
@@ -270,7 +309,6 @@ test_scripts=	tests/conflicts.sh \
 		tests/requires.sh \
 		tests/spdxtool.sh \
 		tests/symlink.sh \
-		tests/sysroot.sh \
 		tests/version.sh
 
 test_sh = $(test_scripts)
@@ -358,8 +396,10 @@ CLEANFILES =	$(EXTRA_PROGRAMS) \
 check: pkgconf test-runner $(check_SCRIPTS)
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/basic
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/ordering
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/parser
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/solver
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/sbom
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/sysroot
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/tuple
 	kyua --config=none test --kyuafile='$(top_builddir)/Kyuafile' \
 		--build-root='$(top_builddir)'

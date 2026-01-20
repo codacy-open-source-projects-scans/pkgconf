@@ -102,6 +102,8 @@ struct pkgconf_dependency_ {
 
 	int refcount;
 	pkgconf_client_t *owner;
+
+	char *why;
 };
 
 struct pkgconf_tuple_ {
@@ -358,6 +360,7 @@ PKGCONF_API void pkgconf_pkg_unref(pkgconf_client_t *client, pkgconf_pkg_t *pkg)
 PKGCONF_API void pkgconf_pkg_free(pkgconf_client_t *client, pkgconf_pkg_t *pkg);
 PKGCONF_API pkgconf_pkg_t *pkgconf_pkg_find(pkgconf_client_t *client, const char *name);
 PKGCONF_API unsigned int pkgconf_pkg_traverse(pkgconf_client_t *client, pkgconf_pkg_t *root, pkgconf_pkg_traverse_func_t func, void *data, int maxdepth, unsigned int skip_flags);
+PKGCONF_API unsigned int pkgconf_pkg_walk_conflicts_list(pkgconf_client_t *client, pkgconf_pkg_t *root, pkgconf_list_t *deplist);
 PKGCONF_API unsigned int pkgconf_pkg_verify_graph(pkgconf_client_t *client, pkgconf_pkg_t *root, int depth);
 PKGCONF_API pkgconf_pkg_t *pkgconf_pkg_verify_dependency(pkgconf_client_t *client, pkgconf_dependency_t *pkgdep, unsigned int *eflags);
 PKGCONF_API const char *pkgconf_pkg_get_comparator(const pkgconf_dependency_t *pkgdep);
@@ -458,8 +461,9 @@ PKGCONF_API void pkgconf_buffer_trim_byte(pkgconf_buffer_t *buffer);
 PKGCONF_API void pkgconf_buffer_finalize(pkgconf_buffer_t *buffer);
 PKGCONF_API void pkgconf_buffer_fputs(pkgconf_buffer_t *buffer, FILE *out);
 PKGCONF_API void pkgconf_buffer_vjoin(pkgconf_buffer_t *buffer, char delim, va_list va);
-PKGCONF_API void pkgconf_buffer_join(pkgconf_buffer_t *buffer, char delim, ...);
+PKGCONF_API void pkgconf_buffer_join(pkgconf_buffer_t *buffer, int delim, ...);
 PKGCONF_API bool pkgconf_buffer_contains(const pkgconf_buffer_t *haystack, const pkgconf_buffer_t *needle);
+PKGCONF_API bool pkgconf_buffer_contains_byte(const pkgconf_buffer_t *haystack, char needle);
 PKGCONF_API bool pkgconf_buffer_match(const pkgconf_buffer_t *haystack, const pkgconf_buffer_t *needle);
 PKGCONF_API void pkgconf_buffer_subst(pkgconf_buffer_t *dest, const pkgconf_buffer_t *src, const char *pattern, const char *value);
 static inline const char *pkgconf_buffer_str(const pkgconf_buffer_t *buffer) {
@@ -496,6 +500,12 @@ static inline char *pkgconf_buffer_freeze(pkgconf_buffer_t *buffer) {
 	char *out = strdup(pkgconf_buffer_str(buffer));
 	pkgconf_buffer_reset(buffer);
 	return out;
+}
+
+static inline void pkgconf_buffer_copy(pkgconf_buffer_t *buffer, pkgconf_buffer_t *newptr)
+{
+    pkgconf_buffer_reset(newptr);
+    pkgconf_buffer_append(newptr, pkgconf_buffer_str(buffer));
 }
 
 /* fileio.c */

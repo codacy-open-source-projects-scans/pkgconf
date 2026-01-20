@@ -29,6 +29,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/builtin-pkgconf-exists.test \
 		t/basic/builtin-pkgconf-pc_path-variable.test \
 		t/basic/define-prefix.test \
+		t/basic/define-prefix-child-prefix-env.test \
+		t/basic/define-prefix-child-prefix.test \
 		t/basic/direct-query-with-pkg_config_path.test \
 		t/basic/env-tuple.test \
 		t/basic/exists-cflags-env.test \
@@ -52,10 +54,12 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/libs-cflags-version-not.test \
 		t/basic/libs-cflags-version-not-provided.test \
 		t/basic/libs-env.test \
+		t/basic/libs-only.test \
 		t/basic/malformed-empty-package.test \
 		t/basic/modversion-fullpath.test \
 		t/basic/modversion-noflatten.test \
 		t/basic/modversion-uninstalled.test \
+		t/basic/modversion-verbose-prefix.test \
 		t/basic/noargs.test \
 		t/basic/nocflags.test \
 		t/basic/nolibs.test \
@@ -68,6 +72,14 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/variable-env.test \
 		t/basic/variable-no-recursion.test \
 		t/basic/variable.test \
+		t/basic/version-atleast-1.test \
+		t/basic/version-atleast-2.test \
+		t/basic/version-exact-1.test \
+		t/basic/version-exact-2.test \
+		t/basic/version-max-1.test \
+		t/basic/version-max-2.test \
+		t/ordering/cflags-never-mergeback.test \
+		t/ordering/cflags-only.test \
 		t/ordering/flag-order-1.test \
 		t/ordering/flag-order-2.test \
 		t/ordering/flag-order-3.test \
@@ -79,6 +91,7 @@ EXTRA_DIST =	pkg.m4 \
 		t/ordering/idirafter-munge-ordering.test \
 		t/ordering/idirafter-ordering.test \
 		t/ordering/isystem-munge-ordering.test \
+		t/ordering/libs-never-mergeback.test \
 		t/parser/argv-parse-1.test \
 		t/parser/argv-parse-2.test \
 		t/parser/argv-parse-3.test \
@@ -90,6 +103,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/fragment-comment.test \
 		t/parser/fragment-groups-composite.test \
 		t/parser/fragment-groups.test \
+		t/parser/malformed-no-newlines.test \
+		t/parser/malformed-quoting.test \
 		t/parser/multiline-bogus-header.test \
 		t/parser/multiline-field.test \
 		t/parser/no-trailing-newline.test \
@@ -103,6 +118,9 @@ EXTRA_DIST =	pkg.m4 \
 		t/solver/circular-reference-1.test \
 		t/solver/circular-reference-2.test \
 		t/solver/circular-reference-directpc.test \
+		t/solver/conflicts-solution-error.test \
+		t/solver/conflicts-solution-ignore.test \
+		t/solver/conflicts-solution-is-fine-standalone.test \
 		t/solver/depgraph-break-1.test \
 		t/solver/depgraph-break-2.test \
 		t/solver/depgraph-break-3.test \
@@ -134,6 +152,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/solver/provides-print-simple.test \
 		t/solver/provides-request-simple.test \
 		t/solver/provides-request-simple-no-provides.test \
+		t/solver/query-no-space-0.test \
+		t/solver/query-no-space-1.test \
 		t/solver/query-order-1.test \
 		t/solver/query-order-2.test \
 		t/solver/requires-internal-collision.test \
@@ -151,6 +171,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/sbom/source-tag-bar.test \
 		t/sbom/source-tag-foo.test \
 		t/sysroot/cflags-rewriting.test \
+		t/sysroot/idirafter-munge-sysroot.test \
+		t/sysroot/isystem-munge-sysroot.test \
 		t/sysroot/no-pc_sysrootdir-rewriting-2.test \
 		t/sysroot/no-pc_sysrootdir-rewriting-3.test \
 		t/sysroot/no-pc_sysrootdir-rewriting-4.test \
@@ -167,6 +189,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/tuple/billion-laughs.test \
 		t/tuple/case-sensitivity-1.test \
 		t/tuple/case-sensitivity-2.test \
+		t/tuple/define-variable-override.test \
+		t/tuple/define-variable.test \
 		t/tuple/duplicate-upsert.test \
 		t/tuple/empty-tuple.test \
 		tests/lib-relocatable/lib/pkgconfig/foo.pc \
@@ -302,14 +326,13 @@ EXTRA_DIST =	pkg.m4 \
 		doc/libpkgconf-queue.rst \
 		doc/libpkgconf-tuple.rst
 
-test_scripts=	tests/conflicts.sh \
+test_scripts=	\
 		tests/parser.sh \
 		tests/personality.sh \
 		tests/regress.sh \
 		tests/requires.sh \
 		tests/spdxtool.sh \
-		tests/symlink.sh \
-		tests/version.sh
+		tests/symlink.sh
 
 test_sh = $(test_scripts)
 check_SCRIPTS = ${test_sh:.sh=}

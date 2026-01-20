@@ -3,14 +3,12 @@ configure_file(input: 'test_env.sh.in', output: 'test_env.sh', configuration: cd
 
 
 tests = [
-  'conflicts',
   'parser',
   'personality',
   'regress',
   'requires',
   'spdxtool',
   'symlink',
-  'version',
 ]
 
 

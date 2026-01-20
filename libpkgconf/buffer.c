@@ -161,13 +161,15 @@ pkgconf_buffer_vjoin(pkgconf_buffer_t *buffer, char delim, va_list src_va)
 	va_end(va);
 }
 
+// NOTE: due to C's rules regarding promotion in variable args and permissible variables, delim must
+// be an int here.
 void
-pkgconf_buffer_join(pkgconf_buffer_t *buffer, char delim, ...)
+pkgconf_buffer_join(pkgconf_buffer_t *buffer, int delim, ...)
 {
 	va_list va;
 
 	va_start(va, delim);
-	pkgconf_buffer_vjoin(buffer, delim, va);
+	pkgconf_buffer_vjoin(buffer, (char)delim, va);
 	va_end(va);
 }
 
@@ -178,6 +180,13 @@ pkgconf_buffer_contains(const pkgconf_buffer_t *haystack, const pkgconf_buffer_t
 	const char *needle_str = pkgconf_buffer_str_or_empty(needle);
 
 	return strstr(haystack_str, needle_str) != NULL;
+}
+
+bool
+pkgconf_buffer_contains_byte(const pkgconf_buffer_t *haystack, char needle)
+{
+	const char *haystack_str = pkgconf_buffer_str_or_empty(haystack);
+	return strchr(haystack_str, needle) != NULL;
 }
 
 bool

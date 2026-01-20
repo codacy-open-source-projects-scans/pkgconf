@@ -62,6 +62,14 @@ typedef struct test_case_ {
 	pkgconf_buffer_t fragment_filter;
 
 	pkgconf_buffer_t skip_platforms;
+
+	pkgconf_list_t define_variables;
+
+	int verbosity;
+
+	pkgconf_buffer_t atleast_version;
+	pkgconf_buffer_t exact_version;
+	pkgconf_buffer_t max_version;
 } pkgconf_test_case_t;
 
 typedef struct test_state_ {
@@ -315,10 +323,10 @@ static const pkgconf_test_flag_pair_t test_flag_pairs[] = {
 	{"exists",		PKG_EXISTS},
 	{"exists-cflags",	PKG_EXISTS_CFLAGS},
 	{"fragment-tree",	PKG_FRAGMENT_TREE},
-	{"keep-system-cflags",	PKG_KEEP_SYSTEM_CFLAGS},
-	{"keep-system-libs",	PKG_KEEP_SYSTEM_LIBS},
 	{"ignore-conflicts",	PKG_IGNORE_CONFLICTS},
 	{"internal-cflags",	PKG_INTERNAL_CFLAGS},
+	{"keep-system-cflags",	PKG_KEEP_SYSTEM_CFLAGS},
+	{"keep-system-libs",	PKG_KEEP_SYSTEM_LIBS},
 	{"libs",		PKG_LIBS},
 	{"libs-only-ldpath",	PKG_LIBS_ONLY_LDPATH},
 	{"libs-only-libname",	PKG_LIBS_ONLY_LIBNAME},
@@ -452,16 +460,21 @@ test_keyword_set_environment(pkgconf_test_case_t *testcase, const char *keyword,
 }
 
 static const pkgconf_test_keyword_pair_t test_keyword_pairs[] = {
+	{"AtLeastVersion", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, atleast_version)},
+	{"DefineVariable", test_keyword_extend_bufferset, offsetof(pkgconf_test_case_t, define_variables)},
 	{"Environment", test_keyword_set_environment, offsetof(pkgconf_test_case_t, env_vars)},
+	{"ExactVersion", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, exact_version)},
 	{"ExpectedExitCode", test_keyword_set_int, offsetof(pkgconf_test_case_t, exitcode)},
 	{"ExpectedStderr", test_keyword_extend_bufferset, offsetof(pkgconf_test_case_t, expected_stderr)},
 	{"ExpectedStdout", test_keyword_extend_bufferset, offsetof(pkgconf_test_case_t, expected_stdout)},
 	{"FragmentFilter", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, fragment_filter)},
 	{"MatchStderr", test_keyword_set_match_strategy, offsetof(pkgconf_test_case_t, match_stderr)},
 	{"MatchStdout", test_keyword_set_match_strategy, offsetof(pkgconf_test_case_t, match_stdout)},
+	{"MaxVersion", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, max_version)},
 	{"PackageSearchPath", test_keyword_set_path_list, offsetof(pkgconf_test_case_t, search_path)},
 	{"Query", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, query)},
 	{"SkipPlatforms", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, skip_platforms)},
+	{"VerbosityLevel", test_keyword_set_int, offsetof(pkgconf_test_case_t, verbosity)},
 	{"WantedFlags", test_keyword_set_wanted_flags, offsetof(pkgconf_test_case_t, wanted_flags)},
 	{"WantEnvPrefix", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, want_env_prefix)},
 	{"WantVariable", test_keyword_set_buffer, offsetof(pkgconf_test_case_t, want_variable)},
@@ -625,12 +638,14 @@ annotate_result(const pkgconf_test_case_t *testcase, int ret, const pkgconf_test
                 "environment:\n"
                 "  %s\n"
 		"query: [%s]\n"
-		"exit-code: %d\n",
+		"exit-code: %d\n"
+		"verbosity: %d\n",
 		pkgconf_buffer_str_or_empty(&search_path_buf),
 		pkgconf_buffer_str_or_empty(&wanted_flags_buf),
 		pkgconf_buffer_str_or_empty(&env_buf),
 		pkgconf_buffer_str_or_empty(&testcase->query),
-		ret);
+		ret,
+		testcase->verbosity);
 
 	fprintf(stderr, "stdout: [%s]\n",
 		pkgconf_buffer_str_or_empty(&out->o_stdout));
@@ -656,6 +671,13 @@ annotate_result(const pkgconf_test_case_t *testcase, int ret, const pkgconf_test
 			"expected-stderr: [%s] (%s)\n",
 			pkgconf_buffer_str_or_empty(&set->buffer),
 			testcase->match_stderr == MATCH_PARTIAL ? "partial" : "exact");
+	}
+
+	PKGCONF_FOREACH_LIST_ENTRY(testcase->define_variables.head, n)
+	{
+		pkgconf_test_bufferset_t *set = n->data;
+
+		fprintf(stderr,	"define-variable: [%s]\n", pkgconf_buffer_str_or_empty(&set->buffer));
 	}
 
 	fprintf(stderr,
@@ -689,6 +711,10 @@ run_test_case(const pkgconf_test_case_t *testcase)
 		.cli_state.want_env_prefix = pkgconf_buffer_str(&testcase->want_env_prefix),
 		.cli_state.want_variable = pkgconf_buffer_str(&testcase->want_variable),
 		.cli_state.want_fragment_filter = pkgconf_buffer_str(&testcase->fragment_filter),
+		.cli_state.required_module_version = pkgconf_buffer_str(&testcase->atleast_version),
+		.cli_state.required_exact_module_version = pkgconf_buffer_str(&testcase->exact_version),
+		.cli_state.required_max_module_version = pkgconf_buffer_str(&testcase->max_version),
+		.cli_state.verbosity = testcase->verbosity,
 		.testcase = testcase,
 	};
 
@@ -696,6 +722,15 @@ run_test_case(const pkgconf_test_case_t *testcase)
 
 	pkgconf_client_init(&state.cli_state.pkg_client, error_handler, NULL, personality, &state, environ_lookup_handler);
 	pkgconf_client_set_output(&state.cli_state.pkg_client, &out->output);
+
+	pkgconf_node_t *n;
+
+	PKGCONF_FOREACH_LIST_ENTRY(testcase->define_variables.head, n)
+	{
+		pkgconf_test_bufferset_t *set = n->data;
+
+		pkgconf_tuple_define_global(&state.cli_state.pkg_client, pkgconf_buffer_str_or_empty(&set->buffer));
+	}
 
 	pkgconf_buffer_t arg_buf = PKGCONF_BUFFER_INITIALIZER;
 	int test_argc = 0;
@@ -718,8 +753,6 @@ run_test_case(const pkgconf_test_case_t *testcase)
 
 	if (pkgconf_buffer_len(&out->o_stderr))
 		pkgconf_buffer_trim_byte(&out->o_stderr);
-
-	pkgconf_node_t *n;
 
 	PKGCONF_FOREACH_LIST_ENTRY(testcase->expected_stdout.head, n)
 	{
@@ -756,6 +789,7 @@ run_test_case(const pkgconf_test_case_t *testcase)
 void
 free_test_case(pkgconf_test_case_t *testcase)
 {
+	test_bufferset_free(&testcase->define_variables);
 	test_bufferset_free(&testcase->expected_stderr);
 	test_bufferset_free(&testcase->expected_stdout);
 
@@ -767,6 +801,9 @@ free_test_case(pkgconf_test_case_t *testcase)
 	pkgconf_buffer_finalize(&testcase->want_variable);
 	pkgconf_buffer_finalize(&testcase->fragment_filter);
 	pkgconf_buffer_finalize(&testcase->skip_platforms);
+	pkgconf_buffer_finalize(&testcase->atleast_version);
+	pkgconf_buffer_finalize(&testcase->exact_version);
+	pkgconf_buffer_finalize(&testcase->max_version);
 
 	free(testcase->name);
 	free(testcase);

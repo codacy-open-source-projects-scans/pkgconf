@@ -32,6 +32,7 @@ static uint64_t want_flags;
 static size_t maximum_package_count = 0;
 // static int maximum_traverse_depth = 2000;
 static FILE *error_msgout = NULL;
+static FILE *sbom_out = NULL;
 
 static const char *
 environ_lookup_handler(const pkgconf_client_t *client, const char *key)
@@ -86,11 +87,11 @@ generate_spdx_package(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *ptr)
 	if (pkg->flags & PKGCONF_PKG_PROPF_VIRTUAL)
 		return;
 
-	spdxtool_software_sbom_t *sbom = spdxtool_software_sbom_new(client, spdxtool_util_get_spdx_id_string(client, "software_Sbom", pkg->realname), strdup(document->creation_info), strdup("build"));
+	spdxtool_software_sbom_t *sbom = spdxtool_software_sbom_new(client, spdxtool_util_get_spdx_id_string(client, "software_Sbom", pkg->id), strdup(document->creation_info), strdup("build"));
 	sbom->spdx_document = document;
 	sbom->rootElement = pkg;
 
-	package_spdx = spdxtool_util_get_spdx_id_string(client, "Package", pkg->realname);
+	package_spdx = spdxtool_util_get_spdx_id_string(client, "Package", pkg->id);
 
 	pkgconf_tuple_add(client, &pkg->vars, "spdxId", package_spdx, false, 0);
 	free(package_spdx);
@@ -101,13 +102,13 @@ generate_spdx_package(pkgconf_client_t *client, pkgconf_pkg_t *pkg, void *ptr)
 
 	if (pkg->license != NULL)
 	{
-		snprintf(spdx_id_name, 1024, "%s/hasDeclaredLicense", pkg->realname);
+		snprintf(spdx_id_name, 1024, "%s/hasDeclaredLicense", pkg->id);
 		package_spdx = spdxtool_util_get_spdx_id_string(client, "Relationship", spdx_id_name);
 		pkgconf_tuple_add(client, &pkg->vars, "hasDeclaredLicense", package_spdx, false, 0);
 		free(package_spdx);
 		package_spdx = NULL;
 
-		snprintf(spdx_id_name, 1024, "%s/hasConcludedLicense", pkg->realname);
+		snprintf(spdx_id_name, 1024, "%s/hasConcludedLicense", pkg->id);
 		package_spdx = spdxtool_util_get_spdx_id_string(client, "Relationship", spdx_id_name);
 		pkgconf_tuple_add(client, &pkg->vars, "hasConcludedLicense", package_spdx, false, 0);
 		free(package_spdx);
@@ -177,7 +178,7 @@ generate_spdx(pkgconf_client_t *client, pkgconf_pkg_t *world, char *creation_tim
 	spdxtool_core_agent_free(agent);
 	spdxtool_core_creation_info_free(creation);
 
-	printf("%s\n", pkgconf_buffer_str(&buffer));
+	fprintf(sbom_out, "%s\n", pkgconf_buffer_str(&buffer));
 
 	pkgconf_buffer_finalize(&buffer);
 	return true;
@@ -216,6 +217,7 @@ usage(void)
 	printf("  --help                            this message\n");
 	printf("  --about                           print bomtool version and license to stdout\n");
 	printf("  --version                         print bomtool version to stdout\n");
+	printf("  --output FILE                     output SBOM data to file\n");
 
 	return EXIT_SUCCESS;
 }
@@ -238,6 +240,7 @@ main(int argc, char *argv[])
 	};
 
 	error_msgout = stderr;
+	sbom_out = stdout;
 
 	struct pkg_option options[] =
 	{
@@ -247,6 +250,7 @@ main(int argc, char *argv[])
 		{ "version", no_argument, &want_flags, PKG_VERSION, },
 		{ "about", no_argument, &want_flags, PKG_ABOUT, },
 		{ "help", no_argument, &want_flags, PKG_HELP, },
+		{ "output", required_argument, NULL, 103, },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -262,6 +266,14 @@ main(int argc, char *argv[])
 			break;
 		case 102:
 			creation_id = pkg_optarg;
+			break;
+		case 103:
+			sbom_out = fopen(pkg_optarg, "w");
+			if (sbom_out == NULL)
+			{
+				fprintf(stderr, "unable to open %s: %s\n", pkg_optarg, strerror(errno));
+				return EXIT_FAILURE;
+			}
 			break;
 		case '?':
 		case ':':

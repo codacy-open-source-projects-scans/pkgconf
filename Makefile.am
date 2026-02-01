@@ -101,10 +101,20 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/dos-lineendings.test \
 		t/parser/escaped-backslashes-in-output.test \
 		t/parser/fragment-comment.test \
+		t/parser/fragment-escaping-1.test \
+		t/parser/fragment-escaping-2.test \
+		t/parser/fragment-escaping-3.test \
 		t/parser/fragment-groups-composite.test \
 		t/parser/fragment-groups.test \
+		t/parser/fragment-quoting-2.test \
+		t/parser/fragment-quoting-3.test \
+		t/parser/fragment-quoting-5.test \
+		t/parser/fragment-quoting-7.test \
+		t/parser/fragment-quoting.test \
 		t/parser/malformed-no-newlines.test \
 		t/parser/malformed-quoting.test \
+		t/parser/msvc-fragment-quoting.test \
+		t/parser/msvc-fragment-render-cflags.test \
 		t/parser/multiline-bogus-header.test \
 		t/parser/multiline-field.test \
 		t/parser/no-trailing-newline.test \
@@ -115,6 +125,9 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/truncated-files-should-fail-to-parse.test \
 		t/parser/tuple-dequote.test \
 		t/parser/variable-whitespace.test \
+		t/parser/version-with-whitespace-2.test \
+		t/parser/version-with-whitespace-diagnostic.test \
+		t/parser/version-with-whitespace.test \
 		t/solver/circular-reference-1.test \
 		t/solver/circular-reference-2.test \
 		t/solver/circular-reference-directpc.test \
@@ -364,7 +377,8 @@ dist_man_MANS    = 		\
 	man/pkgconf.1		\
 	man/pkg.m4.7		\
 	man/pc.5		\
-	man/pkgconf-personality.5
+	man/pkgconf-personality.5	\
+	man/spdxtool.1
 
 pkgconf_LDADD    = libpkgconf.la
 pkgconf_SOURCES  = \

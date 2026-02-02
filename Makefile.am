@@ -128,9 +128,14 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/version-with-whitespace-2.test \
 		t/parser/version-with-whitespace-diagnostic.test \
 		t/parser/version-with-whitespace.test \
+		t/personality/dump-personality.test \
+		t/personality/pc-path-var.test \
+		t/personality/pc-system-includedirs.test \
+		t/personality/pc-system-libdirs.test \
 		t/solver/circular-reference-1.test \
 		t/solver/circular-reference-2.test \
 		t/solver/circular-reference-directpc.test \
+		t/solver/compound-foo-metapackage-3.test \
 		t/solver/conflicts-solution-error.test \
 		t/solver/conflicts-solution-ignore.test \
 		t/solver/conflicts-solution-is-fine-standalone.test \
@@ -169,14 +174,22 @@ EXTRA_DIST =	pkg.m4 \
 		t/solver/query-no-space-1.test \
 		t/solver/query-order-1.test \
 		t/solver/query-order-2.test \
+		t/solver/requires-cflags-libs-private-1.test \
+		t/solver/requires-cflags-libs-private-2.test \
 		t/solver/requires-internal-collision.test \
 		t/solver/requires-internal-missing-nonstatic-cflags-libs.test \
 		t/solver/requires-internal-missing-nonstatic.test \
 		t/solver/requires-internal-missing-static-cflags.test \
 		t/solver/requires-internal-missing.test \
 		t/solver/requires-internal.test \
+		t/solver/requires-libs-cflags.test \
+		t/solver/requires-libs-static-2.test \
+		t/solver/requires-libs-static-pure.test \
+		t/solver/requires-libs-static.test \
+		t/solver/requires-libs.test \
 		t/solver/requires-private-debounce.test \
 		t/solver/requires-private-missing.test \
+		t/solver/requires-static-cflags.test \
 		t/sbom/license-file-bar.test \
 		t/sbom/license-file-foo.test \
 		t/sbom/license-isc.test \
@@ -341,9 +354,7 @@ EXTRA_DIST =	pkg.m4 \
 
 test_scripts=	\
 		tests/parser.sh \
-		tests/personality.sh \
 		tests/regress.sh \
-		tests/requires.sh \
 		tests/spdxtool.sh \
 		tests/symlink.sh
 
@@ -434,6 +445,7 @@ check: pkgconf test-runner $(check_SCRIPTS)
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/basic
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/ordering
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/parser
+	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/personality
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/solver
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/sbom
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests $(top_srcdir)/t/sysroot

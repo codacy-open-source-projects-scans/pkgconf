@@ -423,21 +423,39 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 	pkgconf_strlcpy(canonicalized_value, value, sizeof canonicalized_value);
 	canonicalize_path(canonicalized_value);
 
+	if (!(pkg->owner->flags & PKGCONF_PKG_PKGF_REDEFINE_PREFIX))
+	{
+		pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, value, true, pkg->flags);
+		return;
+	}
+
 	/* Some pc files will use absolute paths for all of their directories
 	 * which is broken when redefining the prefix. We try to outsmart the
 	 * file and rewrite any directory that starts with the same prefix.
 	 */
-	if (pkg->owner->flags & PKGCONF_PKG_PKGF_REDEFINE_PREFIX && pkg->orig_prefix
-	    && is_path_prefix_equal(canonicalized_value, pkg->orig_prefix->value, strlen(pkg->orig_prefix->value)))
+	if (strcmp(keyword, pkg->owner->prefix_varname))
 	{
-		char newvalue[PKGCONF_ITEM_SIZE];
+		if (pkgconf_buffer_len(&pkg->orig_prefix) != 0)
+		{
+			const char *op = pkgconf_buffer_str_or_empty(&pkg->orig_prefix);
+			const size_t oplen = pkgconf_buffer_len(&pkg->orig_prefix);
 
-		pkgconf_strlcpy(newvalue, pkg->prefix->value, sizeof newvalue);
-		pkgconf_strlcat(newvalue, canonicalized_value + strlen(pkg->orig_prefix->value), sizeof newvalue);
-		pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, newvalue, false, pkg->flags);
-	}
-	else if (strcmp(keyword, pkg->owner->prefix_varname) || !(pkg->owner->flags & PKGCONF_PKG_PKGF_REDEFINE_PREFIX))
+			if (is_path_prefix_equal(canonicalized_value, op, oplen))
+			{
+				pkgconf_buffer_t newvalue = PKGCONF_BUFFER_INITIALIZER;
+
+				pkgconf_buffer_append(&newvalue, pkgconf_buffer_str_or_empty(&pkg->calculated_prefix));
+				pkgconf_buffer_append(&newvalue, canonicalized_value + oplen);
+
+				pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, pkgconf_buffer_str(&newvalue), false, pkg->flags);
+				pkgconf_buffer_finalize(&newvalue);
+
+				return;
+			}
+		}
+
 		pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, value, true, pkg->flags);
+	}
 	else
 	{
 		char pathbuf[PKGCONF_ITEM_SIZE];
@@ -446,8 +464,11 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 		if (relvalue != NULL)
 		{
 			char *prefix_value = convert_path_to_value(relvalue);
-			pkg->orig_prefix = pkgconf_tuple_add(pkg->owner, &pkg->vars, "orig_prefix", canonicalized_value, true, pkg->flags);
-			pkg->prefix = pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, prefix_value, false, pkg->flags);
+
+			pkgconf_buffer_append(&pkg->orig_prefix, canonicalized_value);
+			pkgconf_buffer_append(&pkg->calculated_prefix, prefix_value);
+
+			pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, prefix_value, false, pkg->flags);
 			free(prefix_value);
 		}
 		else
@@ -550,6 +571,9 @@ pkg_free_object(pkgconf_pkg_t *pkg)
 
 	if (pkg->source != NULL)
 		free(pkg->source);
+
+	pkgconf_buffer_finalize(&pkg->orig_prefix);
+	pkgconf_buffer_finalize(&pkg->calculated_prefix);
 
 	free(pkg);
 }

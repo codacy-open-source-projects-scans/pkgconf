@@ -1,35 +1,51 @@
 project('pkgconf', 'c',
   version : '2.5.1',
   license : 'ISC',
-  default_options : ['c_std=c99'],
+  default_options : [
+    'c_std=c99',
+    'warning_level=2',
+  ],
   meson_version: '>=0.52',
 )
 
 cc = meson.get_compiler('c')
 
-add_project_arguments(
-  '-D_BSD_SOURCE',
-  '-D_DARWIN_C_SOURCE',
-  '-D_DEFAULT_SOURCE',
-  '-D_POSIX_C_SOURCE=200809L',
-  cc.get_supported_arguments(
-    '-Wall',
-    '-Wcast-align',
-    '-Wdate-time',
-    '-Wextra',
-    '-Wformat=2',
-    '-Wimplicit-function-declaration',
-    '-Wmisleading-indentation',
-    '-Wmissing-prototypes',
-    '-Wmissing-variable-declarations',
-    '-Wnested-externs',
-    '-Wold-style-definition',
-    '-Wpointer-arith',
-    '-Wshadow',
-    '-Wstrict-prototypes',
-  ),
-  language : 'c',
-)
+if cc.get_id() != 'msvc'
+  add_project_arguments(
+    '-D_BSD_SOURCE',
+    '-D_DARWIN_C_SOURCE',
+    '-D_DEFAULT_SOURCE',
+    '-D_POSIX_C_SOURCE=200809L',
+    cc.get_supported_arguments(
+      '-Wcast-align',
+      '-Wdate-time',
+      '-Wextra',
+      '-Wformat=2',
+      '-Wimplicit-function-declaration',
+      '-Wmisleading-indentation',
+      '-Wmissing-prototypes',
+      '-Wmissing-variable-declarations',
+      '-Wnested-externs',
+      '-Wold-style-definition',
+      '-Wpointer-arith',
+      '-Wshadow',
+      '-Wstrict-prototypes',
+    ),
+    language : 'c',
+  )
+else
+  add_project_arguments(
+    '/wd4130',
+    '/wd4200',
+    '/wd4774',
+    '/wd4820',
+    '/wd4668',
+    '/wd4996',
+    '/wd5045',
+    '/D_CRT_SECURE_NO_WARNINGS',
+    language : 'c',
+  )
+endif
 
 cdata = configuration_data()
 
@@ -184,7 +200,7 @@ test_runner_exe = executable('test-runner',
   link_with : libpkgconf,
   c_args : build_static,
   include_directories : cli_include,
-  install : true)
+  install : false)
 
 fixtures_dir = '@0@/tests'.format(meson.current_source_dir())
 test_suites = [

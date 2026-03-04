@@ -111,6 +111,7 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/fragment-quoting-5.test \
 		t/parser/fragment-quoting-7.test \
 		t/parser/fragment-quoting.test \
+		t/parser/fragment-tree.test \
 		t/parser/malformed-no-newlines.test \
 		t/parser/malformed-quoting.test \
 		t/parser/msvc-fragment-quoting.test \
@@ -205,6 +206,7 @@ EXTRA_DIST =	pkg.m4 \
 		t/sysroot/no-pc_sysrootdir-rewriting-4.test \
 		t/sysroot/no-pc_sysrootdir-rewriting-5.test \
 		t/sysroot/no-pc_sysrootdir-rewriting-variable.test \
+		t/sysroot/path-segment-awareness.test \
 		t/sysroot/skip-rewriting-when-sysroot-dir-is-root-dir.test \
 		t/sysroot/undefined-pc_sysrootdir-should-be-empty.test \
 		t/sysroot/uninstalled-rewriting-fdo-rules-with-pc_sysrootdir.test \
@@ -354,7 +356,6 @@ EXTRA_DIST =	pkg.m4 \
 		doc/libpkgconf-tuple.rst
 
 test_scripts=	\
-		tests/parser.sh \
 		tests/spdxtool.sh \
 		tests/symlink.sh
 
@@ -435,7 +436,7 @@ test_runner_SOURCES = \
 	cli/renderer-msvc.c \
 	tests/test-runner.c
 
-dist_doc_DATA = DCO README.md AUTHORS
+dist_doc_DATA = CONTRIBUTING.md DCO README.md AUTHORS
 
 m4datadir              = $(datadir)/aclocal
 m4data_DATA            = pkg.m4

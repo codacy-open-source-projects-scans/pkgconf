@@ -161,6 +161,8 @@ pkgconf_pkg_parser_version_func(pkgconf_client_t *client, pkgconf_pkg_t *pkg, co
 
 	/* cut at any detected whitespace */
 	p = pkgconf_bytecode_eval_str(client, &pkg->vars, value, NULL);
+	if (p == NULL)
+		return;
 
 	len = strcspn(p, " \t");
 	if (len != strlen(p))
@@ -484,11 +486,12 @@ static const pkgconf_parser_operand_func_t pkg_parser_funcs[256] = {
 	['='] = pkgconf_pkg_parser_value_set
 };
 
-static void pkg_warn_func(pkgconf_pkg_t *pkg, const char *fmt, ...) PRINTFLIKE(2, 3);
+static void pkg_warn_func(void *pkg_p, const char *fmt, ...) PRINTFLIKE(2, 3);
 
 static void
-pkg_warn_func(pkgconf_pkg_t *pkg, const char *fmt, ...)
+pkg_warn_func(void *pkg_p, const char *fmt, ...)
 {
+	pkgconf_pkg_t *pkg = pkg_p;
 	char buf[PKGCONF_ITEM_SIZE];
 	va_list va;
 
@@ -689,7 +692,7 @@ pkgconf_pkg_new_from_path(pkgconf_client_t *client, const char *filename, unsign
 			*idptr = '\0';
 	}
 
-	pkgconf_parser_parse(f, pkg, pkg_parser_funcs, (pkgconf_parser_warn_func_t) pkg_warn_func, pkg->filename);
+	pkgconf_parser_parse(f, pkg, pkg_parser_funcs, pkg_warn_func, pkg->filename);
 	fclose(f);
 
 	if (!pkgconf_pkg_validate(client, pkg))
@@ -1390,8 +1393,9 @@ pkgconf_pkg_scan_provides_vercmp(const pkgconf_dependency_t *pkgdep, const pkgco
  * attempt to match a single package's Provides rules against the requested dependency node.
  */
 static bool
-pkgconf_pkg_scan_provides_entry(const pkgconf_pkg_t *pkg, const pkgconf_pkg_scan_providers_ctx_t *ctx)
+pkgconf_pkg_scan_provides_entry(const pkgconf_pkg_t *pkg, void *data)
 {
+	const pkgconf_pkg_scan_providers_ctx_t *ctx = data;
 	const pkgconf_dependency_t *pkgdep = ctx->pkgdep;
 	pkgconf_node_t *node;
 
@@ -1418,7 +1422,7 @@ pkgconf_pkg_scan_providers(pkgconf_client_t *client, pkgconf_dependency_t *pkgde
 		.pkgdep = pkgdep,
 	};
 
-	pkg = pkgconf_scan_all(client, &ctx, (pkgconf_pkg_iteration_func_t) pkgconf_pkg_scan_provides_entry);
+	pkg = pkgconf_scan_all(client, &ctx, pkgconf_pkg_scan_provides_entry);
 	if (pkg != NULL)
 	{
 		pkgdep->match = pkgconf_pkg_ref(client, pkg);

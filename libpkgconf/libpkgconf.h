@@ -111,13 +111,19 @@ struct pkgconf_buffer_ {
 	char *end;
 };
 
+#if defined(_MSC_VER)
+# define PKGCONF_PACKED_STRUCT(name) __pragma(pack(push, 1)) struct name __pragma(pack(pop))
+#else
+# define PKGCONF_PACKED_STRUCT(name) struct __attribute__((__packed__)) name
+#endif
+
 enum pkgconf_bytecode_op {
 	PKGCONF_BYTECODE_OP_TEXT = 1,
 	PKGCONF_BYTECODE_OP_VAR = 2,
 	PKGCONF_BYTECODE_OP_SYSROOT = 3,
 };
 
-typedef struct {
+typedef PKGCONF_PACKED_STRUCT(pkgconf_bytecode_op_) {
 	enum pkgconf_bytecode_op tag;
 	uint32_t size;
 	char data[];
@@ -577,7 +583,7 @@ static inline char pkgconf_buffer_lastc(const pkgconf_buffer_t *buffer) {
 }
 
 #define PKGCONF_BUFFER_INITIALIZER { NULL, NULL }
-#define PKGCONF_BUFFER_FROM_STR(str) &(const pkgconf_buffer_t){ .base = str, .end = str + (str != NULL ? strlen(str) : 0) }
+#define PKGCONF_BUFFER_FROM_STR(str) &(const pkgconf_buffer_t){ .base = str, .end = ((str) ? &(str)[strlen(str)] : (str)) }
 
 static inline void pkgconf_buffer_reset(pkgconf_buffer_t *buffer) {
 	pkgconf_buffer_finalize(buffer);

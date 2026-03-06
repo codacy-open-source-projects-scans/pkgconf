@@ -5,7 +5,7 @@ project('pkgconf', 'c',
     'c_std=c99',
     'warning_level=2',
   ],
-  meson_version: '>=0.52',
+  meson_version: '>=0.56',
 )
 
 cc = meson.get_compiler('c')
@@ -213,7 +213,7 @@ test_runner_exe = executable('test-runner',
   include_directories : cli_include,
   install : false)
 
-fixtures_dir = '@0@/tests'.format(meson.current_source_dir())
+fixtures_dir = join_paths(meson.current_source_dir(), 'tests')
 test_suites = [
   'basic',
   'ordering',
@@ -226,7 +226,7 @@ test_suites = [
 ]
 
 foreach t : test_suites
-  test(t, test_runner_exe, args : ['--test-fixtures', fixtures_dir, '@0@/t/@1@'.format(meson.current_source_dir(), t)])
+  test(t, test_runner_exe, args : ['--test-fixtures', fixtures_dir, join_paths(meson.current_source_dir(), 't', t)])
 endforeach
 
 with_tests = get_option('tests')

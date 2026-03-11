@@ -57,8 +57,6 @@ endif
 cdata = configuration_data()
 
 check_functions = [
-  ['strlcat', 'string.h'],
-  ['strlcpy', 'string.h'],
   ['strndup', 'string.h'],
   ['strdup', 'string.h'],
   ['strncasecmp', 'strings.h'],

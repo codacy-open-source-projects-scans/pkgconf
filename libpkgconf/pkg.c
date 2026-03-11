@@ -52,38 +52,40 @@ str_has_suffix(const char *str, const char *suffix)
 static char *
 pkg_get_parent_dir(pkgconf_pkg_t *pkg)
 {
-	char buf[PKGCONF_ITEM_SIZE], *pathbuf;
+	pkgconf_buffer_t buf = PKGCONF_BUFFER_INITIALIZER;
+	pkgconf_buffer_t pathbuf = PKGCONF_BUFFER_INITIALIZER;
 
-	pkgconf_strlcpy(buf, pkg->filename, sizeof buf);
+	pkgconf_buffer_append(&buf, pkg->filename);
+
 #ifndef _WIN32
-	/*
-	 * We want to resolve symlinks, since ${pcfiledir} should point to the
-	 * parent of the file symlinked to.
-	 */
 	struct stat path_stat;
-	while (!lstat(buf, &path_stat) && S_ISLNK(path_stat.st_mode))
+
+	while (buf.base != NULL &&
+	       !lstat(buf.base, &path_stat) &&
+	       S_ISLNK(path_stat.st_mode))
 	{
 		char sourcebuf[PKGCONF_ITEM_SIZE];
+		char *targetfilename, *targetdir;
 
-		/*
-		 * Have to split the path into the dir + file components,
-		 * in order to extract the directory file descriptor.
-		 *
-		 * The nomenclature here uses the
-		 *
-		 *   ln <source> <target>
-		 *
-		 * model.
-		 */
-		char basenamebuf[PKGCONF_ITEM_SIZE];
-		pkgconf_strlcpy(basenamebuf, buf, sizeof(basenamebuf));
+		pkgconf_buffer_reset(&pathbuf);
+		pkgconf_buffer_append(&pathbuf, buf.base);
 
-		char dirnamebuf[PKGCONF_ITEM_SIZE];
-		pkgconf_strlcpy(dirnamebuf, buf, sizeof(dirnamebuf));
-		const char* targetdir = dirname(dirnamebuf);
+		targetfilename = strrchr(pathbuf.base, '/');
+		if (targetfilename != NULL)
+		{
+			*targetfilename++ = '\0';
+			targetdir = pathbuf.base;
+
+			if (*targetdir == '\0')
+				targetdir = "/";
+		}
+		else
+		{
+			targetfilename = pathbuf.base;
+			targetdir = ".";
+		}
 
 #ifdef HAVE_DECL_READLINKAT
-		const char* targetfilename = basename(basenamebuf);
 		const int dirfd = open(targetdir, O_DIRECTORY);
 		if (dirfd == -1)
 			break;
@@ -91,14 +93,15 @@ pkg_get_parent_dir(pkgconf_pkg_t *pkg)
 		ssize_t len = readlinkat(dirfd, targetfilename, sourcebuf, sizeof(sourcebuf) - 1);
 		close(dirfd);
 #else
-		ssize_t len = readlink(buf, sourcebuf, sizeof(sourcebuf) - 1);
+		ssize_t len = readlink(buf.base, sourcebuf, sizeof(sourcebuf) - 1);
 #endif
 
 		if (len == -1)
 			break;
 		sourcebuf[len] = '\0';
 
-		memset(buf, '\0', sizeof buf);
+		pkgconf_buffer_reset(&buf);
+
 		/*
 		 * The logic here can be a bit tricky, so here's a table:
 		 *
@@ -109,23 +112,25 @@ pkg_get_parent_dir(pkgconf_pkg_t *pkg)
 		 *     /bar (absolute)  |  /foo/link (absolute)  |         /bar (absolute)
 		 *   ../bar (relative)  |  /foo/link (absolute)  |  /foo/../bar (relative)
 		 */
-		if ((sourcebuf[0] != '/')        /* absolute path in <source> wins */
-		    && (strcmp(targetdir, "."))) /* do not prepend "." */
-		{
-			pkgconf_strlcat(buf, targetdir, sizeof buf);
-			pkgconf_strlcat(buf, "/", sizeof buf);
-		}
-		pkgconf_strlcat(buf, sourcebuf, sizeof buf);
+		if ((sourcebuf[0] != '/') && strcmp(targetdir, "."))
+			pkgconf_buffer_append_fmt(&buf, "%s/", targetdir);
+
+		pkgconf_buffer_append(&buf, sourcebuf);
 	}
 #endif
 
-	pathbuf = strrchr(buf, PKG_DIR_SEP_S);
-	if (pathbuf == NULL)
-		pathbuf = strrchr(buf, '/');
-	if (pathbuf != NULL)
-		pathbuf[0] = '\0';
+	pkgconf_buffer_finalize(&pathbuf);
 
-	return strdup(buf);
+	if (pkgconf_buffer_len(&buf) > 0)
+	{
+		char *pathbufp = strrchr(buf.base, PKG_DIR_SEP_S);
+		if (pathbufp == NULL)
+			pathbufp = strrchr(buf.base, '/');
+		if (pathbufp != NULL)
+			pathbufp[0] = '\0';
+	}
+
+	return pkgconf_buffer_freeze(&buf);
 }
 
 typedef void (*pkgconf_pkg_parser_keyword_func_t)(pkgconf_client_t *client, pkgconf_pkg_t *pkg, const char *keyword, const char *warnprefix, const ptrdiff_t offset, const char *value);
@@ -279,12 +284,15 @@ pkgconf_pkg_parser_keyword_set(void *opaque, const char *warnprefix, const char 
 }
 
 static const char *
-determine_prefix(const pkgconf_pkg_t *pkg, char *buf, size_t buflen)
+determine_prefix(const pkgconf_pkg_t *pkg, pkgconf_buffer_t *pathbuf)
 {
 	char *pathiter;
 
-	pkgconf_strlcpy(buf, pkg->filename, buflen);
-	pkgconf_path_relocate(buf, buflen);
+	pkgconf_buffer_append(pathbuf, pkg->filename);
+	pkgconf_path_relocate(pathbuf);
+
+	/* XXX: ugly */
+	char *buf = pathbuf->base;
 
 	pathiter = strrchr(buf, PKG_DIR_SEP_S);
 	if (pathiter == NULL)
@@ -328,25 +336,23 @@ determine_prefix(const pkgconf_pkg_t *pkg, char *buf, size_t buflen)
 static char *
 convert_path_to_value(const char *path)
 {
-	char *buf = calloc(1, (strlen(path) + 1) * 2);
-	if (buf == NULL)
-		return NULL;
-
-	char *bptr = buf;
+	pkgconf_buffer_t buf = PKGCONF_BUFFER_INITIALIZER;
 	const char *i;
 
 	for (i = path; *i != '\0'; i++)
 	{
 		if (*i == PKG_DIR_SEP_S)
-			*bptr++ = '/';
-		else if (*i == ' ') {
-			*bptr++ = '\\';
-			*bptr++ = *i;
-		} else
-			*bptr++ = *i;
+			pkgconf_buffer_push_byte(&buf, '/');
+		else if (*i == ' ')
+		{
+			pkgconf_buffer_push_byte(&buf, '\\');
+			pkgconf_buffer_push_byte(&buf, ' ');
+		}
+		else
+			pkgconf_buffer_push_byte(&buf, *i);
 	}
 
-	return buf;
+	return pkgconf_buffer_freeze(&buf);
 }
 
 static void
@@ -408,7 +414,7 @@ lookup_val_from_env(const pkgconf_client_t *client, const char *pkg_id, const ch
 static void
 pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *keyword, const char *value)
 {
-	char canonicalized_value[PKGCONF_ITEM_SIZE];
+	pkgconf_buffer_t canonicalized_value = PKGCONF_BUFFER_INITIALIZER;
 	pkgconf_pkg_t *pkg = opaque;
 	const char *env_content;
 
@@ -421,13 +427,13 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 		value = env_content;
 	}
 
-	pkgconf_strlcpy(canonicalized_value, value, sizeof canonicalized_value);
-	canonicalize_path(canonicalized_value);
+	pkgconf_buffer_append(&canonicalized_value, value);
+	canonicalize_path(canonicalized_value.base);
 
 	if (!(pkg->owner->flags & PKGCONF_PKG_PKGF_REDEFINE_PREFIX))
 	{
 		pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, value, true, pkg->flags);
-		return;
+		goto out;
 	}
 
 	/* Some pc files will use absolute paths for all of their directories
@@ -441,17 +447,17 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 			const char *op = pkgconf_buffer_str_or_empty(&pkg->orig_prefix);
 			const size_t oplen = pkgconf_buffer_len(&pkg->orig_prefix);
 
-			if (is_path_prefix_equal(canonicalized_value, op, oplen))
+			if (is_path_prefix_equal(pkgconf_buffer_str(&canonicalized_value), op, oplen))
 			{
 				pkgconf_buffer_t newvalue = PKGCONF_BUFFER_INITIALIZER;
 
 				pkgconf_buffer_append(&newvalue, pkgconf_buffer_str_or_empty(&pkg->calculated_prefix));
-				pkgconf_buffer_append(&newvalue, canonicalized_value + oplen);
+				pkgconf_buffer_append(&newvalue, pkgconf_buffer_str(&canonicalized_value) + oplen);
 
 				pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, pkgconf_buffer_str(&newvalue), false, pkg->flags);
 				pkgconf_buffer_finalize(&newvalue);
 
-				return;
+				goto out;
 			}
 		}
 
@@ -459,14 +465,14 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 	}
 	else
 	{
-		char pathbuf[PKGCONF_ITEM_SIZE];
-		const char *relvalue = determine_prefix(pkg, pathbuf, sizeof pathbuf);
+		pkgconf_buffer_t pathbuf = PKGCONF_BUFFER_INITIALIZER;
+		const char *relvalue = determine_prefix(pkg, &pathbuf);
 
 		if (relvalue != NULL)
 		{
 			char *prefix_value = convert_path_to_value(relvalue);
 
-			pkgconf_buffer_append(&pkg->orig_prefix, canonicalized_value);
+			pkgconf_buffer_append(&pkg->orig_prefix, pkgconf_buffer_str(&canonicalized_value));
 			pkgconf_buffer_append(&pkg->calculated_prefix, prefix_value);
 
 			pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, prefix_value, false, pkg->flags);
@@ -474,7 +480,12 @@ pkgconf_pkg_parser_value_set(void *opaque, const char *warnprefix, const char *k
 		}
 		else
 			pkgconf_tuple_add(pkg->owner, &pkg->vars, keyword, value, true, pkg->flags);
+
+		pkgconf_buffer_finalize(&pathbuf);
 	}
+
+out:
+	pkgconf_buffer_finalize(&canonicalized_value);
 }
 
 typedef struct {
@@ -837,19 +848,22 @@ pkgconf_pkg_scan_dir(pkgconf_client_t *client, const char *path, void *data, pkg
 
 	for (dirent = readdir(dir); dirent != NULL; dirent = readdir(dir))
 	{
-		char filebuf[PKGCONF_ITEM_SIZE];
+		pkgconf_buffer_t filebuf = PKGCONF_BUFFER_INITIALIZER;
 		pkgconf_pkg_t *pkg;
 
-		pkgconf_strlcpy(filebuf, path, sizeof filebuf);
-		pkgconf_strlcat(filebuf, "/", sizeof filebuf);
-		pkgconf_strlcat(filebuf, dirent->d_name, sizeof filebuf);
+		pkgconf_buffer_join(&filebuf, '/', path, dirent->d_name, NULL);
 
-		if (!str_has_suffix(filebuf, PKG_CONFIG_EXT))
+		if (!str_has_suffix(pkgconf_buffer_str(&filebuf), PKG_CONFIG_EXT))
+		{
+			pkgconf_buffer_finalize(&filebuf);
 			continue;
+		}
 
-		PKGCONF_TRACE(client, "trying file [%s]", filebuf);
+		PKGCONF_TRACE(client, "trying file [%s]", pkgconf_buffer_str(&filebuf));
 
-		pkg = pkgconf_pkg_new_from_path(client, filebuf, 0);
+		pkg = pkgconf_pkg_new_from_path(client, pkgconf_buffer_str(&filebuf), 0);
+		pkgconf_buffer_finalize(&filebuf);
+
 		if (pkg != NULL)
 		{
 			if (func(pkg, data))

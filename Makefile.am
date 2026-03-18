@@ -98,6 +98,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/c-comments-should-warn.test \
 		t/parser/comments-in-fields.test \
 		t/parser/comments.test \
+		t/parser/dollar-sign-escape.test \
+		t/parser/dollar-sign-escape-2.test \
 		t/parser/dos-lineendings.test \
 		t/parser/escaped-backslashes-in-output.test \
 		t/parser/fragment-comment.test \
@@ -112,12 +114,15 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/fragment-quoting-7.test \
 		t/parser/fragment-quoting.test \
 		t/parser/fragment-tree.test \
+		t/parser/framework-with-libs.test \
 		t/parser/malformed-no-newlines.test \
 		t/parser/malformed-quoting.test \
 		t/parser/msvc-fragment-quoting.test \
 		t/parser/msvc-fragment-render-cflags.test \
 		t/parser/multiline-bogus-header.test \
 		t/parser/multiline-field.test \
+		t/parser/multiline-folding-cflags.test \
+		t/parser/multiline-folding-libs.test \
 		t/parser/no-trailing-newline.test \
 		t/parser/paren-quoting.test \
 		t/parser/shell-quoted-output.test \
@@ -225,6 +230,8 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib-relocatable/lib/pkgconfig/foo.pc \
 		tests/lib1/argv-parse-2.pc \
 		tests/lib1/billion-laughs.pc \
+		tests/lib1/dollar-sign-escape.pc \
+		tests/lib1/dollar-sign-escape-2.pc \
 		tests/lib1/dos-lineendings.pc \
 		tests/lib1/paren-quoting.pc \
 		tests/lib1/argv-parse-3.pc \
@@ -234,6 +241,7 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/prefix-foo1.pc \
 		tests/lib1/argv-parse.pc \
 		tests/lib1/framework-1.pc \
+		tests/lib1/framework-with-libs.pc \
 		tests/lib1/prefix-foo2.pc \
 		tests/lib1/bar.pc \
 		tests/lib1/framework-2.pc \
@@ -253,6 +261,7 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/circular-2.pc \
 		tests/lib1/multiline.pc \
 		tests/lib1/multiline-bogus.pc \
+		tests/lib1/multiline-folding.pc \
 		tests/lib1/tilde-quoting.pc \
 		tests/lib1/circular-3.pc \
 		tests/lib1/no-trailing-newline.pc \

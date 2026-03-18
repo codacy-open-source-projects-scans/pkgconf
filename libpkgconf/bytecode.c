@@ -327,14 +327,32 @@ pkgconf_bytecode_compile(pkgconf_buffer_t *out, const char *value)
 
 	for (; *p != '\0'; p++)
 	{
-		if (*p != '$' || p[1] != '{')
+		const char *name, *q;
+
+		if (*p != '$')
+			continue;
+
+		/* $$ escapes to a literal $ */
+		if (p[1] == '$')
+		{
+			if (p > text_start)
+				pkgconf_bytecode_emit_text(out, text_start, (size_t)(p - text_start));
+
+			pkgconf_bytecode_emit_text(out, "$", 1);
+
+			p++;
+			text_start = p + 1;
+			continue;
+		}
+
+		if (p[1] != '{')
 			continue;
 
 		if (p > text_start)
 			pkgconf_bytecode_emit_text(out, text_start, (size_t)(p - text_start));
 
-		const char *name = p + 2;
-		const char *q = name;
+		name = p + 2;
+		q = name;
 
 		for (; *q != '\0' && *q != '}'; q++)
 			;

@@ -266,7 +266,7 @@ spdxtool_core_spdx_document_new(pkgconf_client_t *client, char *spdx_id, char *c
 		return NULL;
 	}
 
-	(void)client;
+	(void) client;
 
 	spdx_struct = calloc(1, sizeof(spdxtool_core_spdx_document_t));
 
@@ -332,23 +332,22 @@ spdxtool_core_spdx_document_free(spdxtool_core_spdx_document_t *spdx_struct)
 /*
  * !doc
  *
- * .. c:function:: bool spdxtool_core_spdx_document_is_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *license)
+ * .. c:function:: bool spdxtool_core_spdx_document_is_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *license)
  *
  *    Find out if specific license is already there.
  *
  *    :param pkgconf_client_t *client: The pkgconf client being accessed.
  *    :param spdxtool_core_spdx_document_t *spdx_struct: SpdxDocument struct being used.
- *    :param char *license: SPDX name of license
+ *    :param const char *license: SPDX name of license
  *    :return: true is license is there and false if not
  */
 bool
-spdxtool_core_spdx_document_is_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *license)
+spdxtool_core_spdx_document_is_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *license)
 {
 	pkgconf_node_t *iter = NULL;
 	spdxtool_simplelicensing_license_expression_t *expression = NULL;
 
 	(void) client;
-
 
 	if(!license)
 	{
@@ -370,22 +369,21 @@ spdxtool_core_spdx_document_is_license(pkgconf_client_t *client, spdxtool_core_s
 /*
  * !doc
  *
- * .. c:function:: void spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *license)
+ * .. c:function:: void spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *license)
  *
  *    Add license to SpdxDocument and make sure that specific license is not already there.
  *
  *    :param pkgconf_client_t *client: The pkgconf client being accessed.
  *    :param spdxtool_core_spdx_document_t *spdx_struct: SpdxDocument struct being used.
- *    :param char *license: SPDX name of license
+ *    :param const char *license: SPDX name of license
  *    :return: nothing
  */
 void
-spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *license)
+spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *license)
 {
 	pkgconf_node_t *node = NULL;
 
-
-	if(!license)
+	if(!license || !spdx_struct)
 	{
 		return;
 	}
@@ -401,6 +399,7 @@ spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_
 		pkgconf_error(client, "Memory exhausted! Cant't add license to spdx_document.");
 		return;
 	}
+
 	spdxtool_simplelicensing_license_expression_t *expression = spdxtool_simplelicensing_licenseExpression_new(client, license);
 	pkgconf_node_insert_tail(node, expression, &spdx_struct->licenses);
 }
@@ -408,7 +407,7 @@ spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_
 /*
  * !doc
  *
- * .. c:function:: void spdxtool_core_spdx_document_add_element(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *element)
+ * .. c:function:: void spdxtool_core_spdx_document_add_element(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *element)
  *
  *    Add element spdxId to SpdxDocument
  *
@@ -418,13 +417,12 @@ spdxtool_core_spdx_document_add_license(pkgconf_client_t *client, spdxtool_core_
  *    :return: nothing
  */
 void
-spdxtool_core_spdx_document_add_element(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, char *element)
+spdxtool_core_spdx_document_add_element(pkgconf_client_t *client, spdxtool_core_spdx_document_t *spdx_struct, const char *element)
 {
 	pkgconf_node_t *node = NULL;
+	char *nelement = NULL;
 
-	(void) client;
-
-	if(!element)
+	if(!element || !spdx_struct)
 	{
 		return;
 	}
@@ -432,10 +430,19 @@ spdxtool_core_spdx_document_add_element(pkgconf_client_t *client, spdxtool_core_
 	node = calloc(1, sizeof(pkgconf_node_t));
 	if(!node)
 	{
-		pkgconf_error(NULL, "Memory exhausted! Can't add spdx_id's to spdx_document.");
+		pkgconf_error(client, "Memory exhausted! Can't add spdx_id's to spdx_document.");
 		return;
 	}
-	pkgconf_node_insert_tail(node, element, &spdx_struct->element);
+
+	nelement = strdup(element);
+	if(!nelement)
+	{
+		pkgconf_error(client, "Memory exhausted! Can't add spdx_id's to spdx_document.");
+		free(node);
+		return;
+	}
+
+	pkgconf_node_insert_tail(node, nelement, &spdx_struct->element);
 }
 
 /*

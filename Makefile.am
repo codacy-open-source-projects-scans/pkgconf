@@ -130,6 +130,7 @@ EXTRA_DIST =	pkg.m4 \
 		t/parser/tilde-quoting-2.test \
 		t/parser/truncated-files-should-fail-to-parse.test \
 		t/parser/tuple-dequote.test \
+		t/parser/variable-fragment-expansion.test \
 		t/parser/variable-whitespace.test \
 		t/parser/version-with-whitespace-2.test \
 		t/parser/version-with-whitespace-diagnostic.test \
@@ -286,6 +287,7 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/provides-request-simple.pc \
 		tests/lib1/flag-order-1.pc \
 		tests/lib1/flag-order-3.pc \
+		tests/lib1/variable-fragment-expansion.pc \
 		tests/lib1/variable-whitespace.pc \
 		tests/lib1/fragment-collision.pc \
 		tests/lib1/fragment-collision-intermediary.pc \

@@ -1,7 +1,6 @@
 Name: test1
 Description: Test package 1
-URL: https://github.com/pkgconf/pkgconf/
 Version: 1.0.0
 License: BSD-1-Clause
-Source: https://github.com/pkgconf/pkgconf/archive/refs/tags/pkgconf-2.5.1.tar.gz
+Copyright: Test1 copyright text
 Requires: test1

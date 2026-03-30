@@ -28,6 +28,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/builtin-pkg-config-pc_path-variable.test \
 		t/basic/builtin-pkgconf-exists.test \
 		t/basic/builtin-pkgconf-pc_path-variable.test \
+		t/basic/cflags-shared.test \
+		t/basic/cflags-shared-static.test \
 		t/basic/define-prefix.test \
 		t/basic/define-prefix-child-prefix-env.test \
 		t/basic/define-prefix-child-prefix.test \
@@ -65,6 +67,8 @@ EXTRA_DIST =	pkg.m4 \
 		t/basic/nolibs.test \
 		t/basic/pkg-config-path.test \
 		t/basic/print-variables-env.test \
+		t/basic/requires-shared.test \
+		t/basic/requires-shared-static.test \
 		t/basic/single-depth-selectors.test \
 		t/basic/static-archive-libs.test \
 		t/basic/uninstalled-not.test \
@@ -255,6 +259,7 @@ EXTRA_DIST =	pkg.m4 \
 		t/tuple/define-variable.test \
 		t/tuple/duplicate-upsert.test \
 		t/tuple/empty-tuple.test \
+		tests/test-path-utils.c \
 		tests/lib-relocatable/lib/pkgconfig/foo.pc \
 		tests/lib1/argv-parse-2.pc \
 		tests/lib1/billion-laughs.pc \
@@ -281,6 +286,7 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/intermediary-1.pc \
 		tests/lib1/static-archive-libs.pc \
 		tests/lib1/cflags-libs-only.pc \
+		tests/lib1/cflags-shared-test.pc \
 		tests/lib1/intermediary-2.pc \
 		tests/lib1/static-libs.pc \
 		tests/lib1/circular-1.pc \
@@ -348,6 +354,8 @@ EXTRA_DIST =	pkg.m4 \
 		tests/lib1/requires-internal-2.pc \
 		tests/lib1/requires-internal-missing.pc \
 		tests/lib1/requires-internal-collision.pc \
+		tests/lib1/requires-shared.pc \
+		tests/lib1/requires-shared-dep.pc \
 		tests/lib1/tuple-quoting.pc \
 		tests/lib1/empty-tuple.pc \
 		tests/lib1/orphaned-requires-private.pc \
@@ -431,6 +439,7 @@ pkgconf_SOURCES  = \
 	cli/renderer-msvc.c
 pkgconf_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli
 noinst_HEADERS   = \
+	libpkgconf/path.h					\
 	cli/core.h						\
 	cli/getopt_long.h					\
 	cli/renderer-msvc.h					\
@@ -457,13 +466,17 @@ spdxtool_SOURCES  = \
 	cli/getopt_long.c
 spdxtool_CPPFLAGS = -I$(top_srcdir)/libpkgconf -I$(top_srcdir)/cli -I$(top_srcdir)/cli/spdxtool
 
-noinst_PROGRAMS = test-runner
+noinst_PROGRAMS = test-runner test-path-utils
 test_runner_LDADD = libpkgconf.la
 test_runner_SOURCES = \
 	cli/core.c \
 	cli/getopt_long.c \
 	cli/renderer-msvc.c \
 	tests/test-runner.c
+
+test_path_utils_LDADD = libpkgconf.la
+test_path_utils_SOURCES = tests/test-path-utils.c
+test_path_utils_CPPFLAGS = -I$(top_srcdir)/libpkgconf
 
 dist_doc_DATA = CONTRIBUTING.md DCO README.md AUTHORS
 
@@ -472,7 +485,8 @@ m4data_DATA            = pkg.m4
 
 CLEANFILES =	$(EXTRA_PROGRAMS)
 
-check: pkgconf test-runner
+check: pkgconf test-runner test-path-utils
+	$(builddir)/test-path-utils$(EXEEXT)
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests --tool-dir="$(PWD)" $(top_srcdir)/t/basic
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests --tool-dir="$(PWD)" $(top_srcdir)/t/ordering
 	$(builddir)/test-runner$(EXEEXT) --test-fixtures=$(top_srcdir)/tests --tool-dir="$(PWD)" $(top_srcdir)/t/parser
